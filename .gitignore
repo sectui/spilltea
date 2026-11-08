@@ -1,0 +1,4 @@
+/spilltea
+/tmp/
+*.test
+dist/

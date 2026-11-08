@@ -1,0 +1,669 @@
+// Package ui is the root TUI model: the four pages (intercept, history,
+// sitemap, diff), their panes, key bindings and overlays.
+package ui
+
+import (
+	"fmt"
+	"net"
+	"net/url"
+	"slices"
+	"strings"
+
+	tea "charm.land/bubbletea/v2"
+
+	"github.com/sectui/foam/commands"
+	"github.com/sectui/foam/confirm"
+	"github.com/sectui/foam/geom"
+	"github.com/sectui/foam/notify"
+	"github.com/sectui/foam/overlay"
+	"github.com/sectui/foam/prompt"
+	ftree "github.com/sectui/foam/tree"
+
+	"github.com/sectui/spilltea/internal/config"
+	"github.com/sectui/spilltea/internal/message"
+	"github.com/sectui/spilltea/internal/project"
+	"github.com/sectui/spilltea/internal/proxy"
+	"github.com/sectui/spilltea/internal/steep"
+	"github.com/sectui/spilltea/internal/ui/diff"
+	"github.com/sectui/spilltea/internal/ui/entries"
+	"github.com/sectui/spilltea/internal/ui/intercept"
+	"github.com/sectui/spilltea/internal/ui/picker"
+	"github.com/sectui/spilltea/internal/ui/reader"
+	"github.com/sectui/spilltea/internal/ui/sitemap"
+)
+
+type page int
+
+const (
+	pageIntercept page = iota
+	pageHistory
+	pageSitemap
+	pageDiff
+	pageCount
+)
+
+var pageNames = [pageCount]string{"Intercept", "History", "Sitemap", "Diff"}
+
+type pane int
+
+const (
+	paneRequests pane = iota
+	paneResponses
+	paneDetail
+	paneHistory
+	paneHistRequest
+	paneHistResponse
+	paneTree
+	paneSite
+	paneSiteRequest
+	paneSiteResponse
+	paneDiffA
+	paneDiffB
+	paneCount
+)
+
+var pagePanes = [pageCount][]pane{
+	pageIntercept: {paneRequests, paneResponses, paneDetail},
+	pageHistory:   {paneHistory, paneHistRequest, paneHistResponse},
+	pageSitemap:   {paneTree, paneSite, paneSiteRequest, paneSiteResponse},
+	pageDiff:      {paneDiffA, paneDiffB},
+}
+
+type side struct {
+	entry project.Entry
+	ok    bool
+}
+
+type Model struct {
+	cfg  *config.Config
+	reg  *commands.Registry
+	proj *project.Project
+	px   *proxy.Proxy
+	// tests read the proxy events themselves
+	events <-chan any
+
+	overlays overlay.Stack
+	notes    notify.Center
+
+	inter     *intercept.Model
+	lastQueue pane // the queue whose selection the detail pane shows
+
+	hist             *entries.Model
+	histReq, histRes *reader.Model
+	histShown        int // ID of the entry shown in the readers
+
+	tree             *ftree.Model[sitemap.Node]
+	site             *entries.Model
+	siteReq, siteRes *reader.Model
+	siteShown        int
+	siteNode         string
+	siteDirty        bool
+
+	diff       *diff.Model
+	diffA      side
+	diffB      side
+	diffResp   bool // compare responses instead of requests
+	diffLoaded [2]int
+
+	assets bool // shown in the history and the sitemap
+
+	steepLast string // collection picked last when several steeps are open
+
+	page   page
+	focus  [pageCount]pane
+	zoomed bool
+
+	w, h       int
+	rects      [paneCount]geom.Rect
+	toastRects []toastRect
+}
+
+type toastRect struct {
+	geom.Rect
+	id int
+}
+
+// New accepts a nil px (tests); no events come in then.
+func New(cfg *config.Config, proj *project.Project, px *proxy.Proxy) (*Model, error) {
+	reg, err := commands.New(cfg.Keys)
+	if err != nil {
+		return nil, fmt.Errorf("invalid config:\n%w", err)
+	}
+	es, meta, err := proj.Load()
+	if err != nil {
+		return nil, fmt.Errorf("history: %w", err)
+	}
+	history := loadHistory()
+	m := &Model{
+		cfg: cfg, reg: reg, proj: proj, px: px,
+		inter:     intercept.New(),
+		lastQueue: paneRequests,
+		hist:      entries.New(proj, meta, cfg.App.Filters, history),
+		histReq:   reader.New(cfg.View.Wrap, cfg.View.PrettyPrint, cfg.App.Pipes),
+		histRes:   reader.New(cfg.View.Wrap, cfg.View.PrettyPrint, cfg.App.Pipes),
+		tree:      sitemap.New(),
+		site:      entries.New(proj, meta, cfg.App.Filters, history),
+		siteReq:   reader.New(cfg.View.Wrap, cfg.View.PrettyPrint, cfg.App.Pipes),
+		siteRes:   reader.New(cfg.View.Wrap, cfg.View.PrettyPrint, cfg.App.Pipes),
+		siteDirty: true,
+		diff:      diff.New(),
+	}
+	if px != nil {
+		m.events = px.Events()
+	}
+	m.hist.Empty = "No requests yet · proxy on " + shortAddr(cfg.Proxy.Listen)
+	m.site.Empty = "Select a host or a path"
+	m.notes.Max = 100
+	m.focus = [pageCount]pane{paneRequests, paneHistory, paneTree, paneDiffA}
+	for i, n := range []string{"intercept", "history", "sitemap", "diff"} {
+		if cfg.App.Page == n {
+			m.page = page(i)
+		}
+	}
+	m.hist.SetEntries(es)
+	m.hist.SetWithin(nil)
+	m.site.SetEntries(append([]project.Entry(nil), es...))
+	m.site.SetWithin(func(project.Entry) bool { return false })
+	if err := reg.Check(m.allScopes()); err != nil {
+		return nil, fmt.Errorf("invalid config:\n%w", err)
+	}
+	return m, nil
+}
+
+type eventMsg struct{ ev any }
+
+func (m *Model) waitEvent() tea.Cmd {
+	ch := m.events
+	if ch == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		ev, ok := <-ch
+		if !ok {
+			return nil
+		}
+		return eventMsg{ev}
+	}
+}
+
+func (m *Model) Init() tea.Cmd {
+	if m.px != nil && !loopback(m.cfg.Proxy.Listen) {
+		// no authentication: anyone on the network can use it
+		return tea.Batch(m.waitEvent(), notify.Warning("The proxy listens on "+m.cfg.Proxy.Listen+": anyone on the network can use it"))
+	}
+	return m.waitEvent()
+}
+
+func loopback(addr string) bool {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return false
+	}
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
+func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	cmd := m.update(msg)
+	return m, tea.Batch(cmd, m.afterUpdate())
+}
+
+func (m *Model) update(msg tea.Msg) tea.Cmd {
+	if m.overlays.Handle(msg) {
+		return nil
+	}
+	if cmd, ok := m.notes.Update(msg); ok {
+		return cmd
+	}
+	if m.hist.Update(msg) || m.site.Update(msg) {
+		return nil
+	}
+	for _, r := range m.readers() {
+		if r.Update(msg) {
+			return nil
+		}
+	}
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.w, m.h = msg.Width, msg.Height
+		m.layout()
+	case tea.KeyPressMsg:
+		return m.key(msg)
+	case tea.PasteMsg:
+		return m.paste(msg.Content)
+	case tea.MouseMsg:
+		return m.mouse(msg)
+	case eventMsg:
+		return tea.Batch(m.event(msg.ev), m.waitEvent())
+	case entries.OpenMsg:
+		m.open()
+	case entries.NoteMsg:
+		return m.askNote(msg.Entry)
+	case entries.MetaMsg:
+		return tea.Batch(m.hist.Refresh(), m.site.Refresh())
+	case entries.DiffMsg:
+		return m.setDiff(msg.Entry, msg.B)
+	case entries.SteepMsg:
+		return m.steepEntry(msg.Entry)
+	case entries.CopyMsg:
+		return m.copyEntry(msg.Entry)
+	case entries.ForgetMsg:
+		return m.askForget(msg)
+	case entries.HistoryMsg:
+		m.hist.SetHistory(msg.History)
+		m.site.SetHistory(msg.History)
+		return saveHistory(msg.History)
+	case ftree.OpenMsg:
+		m.setFocus(paneSite)
+	case copiedMsg:
+		return m.copied(msg)
+	case forgetMsg:
+		return m.forget(msg.ids)
+	case decideAllMsg:
+		return m.decideAll(msg)
+	}
+	return nil
+}
+
+func (m *Model) readers() []*reader.Model {
+	return []*reader.Model{m.histReq, m.histRes, m.siteReq, m.siteRes}
+}
+
+func (m *Model) event(ev any) tea.Cmd {
+	switch ev := ev.(type) {
+	case proxy.HeldMsg:
+		m.inter.Add(ev.Item)
+		if m.page != pageIntercept && m.inter.Len() == 1 {
+			what := "Request"
+			if ev.Item.Kind == proxy.KindResponse {
+				what = "Response"
+			}
+			return notify.Info(what + " held · " + m.keyOf("page.intercept"))
+		}
+	case proxy.ReleasedMsg:
+		m.inter.Remove(ev.Item)
+	case proxy.EntryMsg:
+		m.hist.Add(ev.Entry)
+		m.site.Add(ev.Entry)
+		m.siteDirty = true
+	case proxy.ErrorMsg:
+		return notify.Err(ev.Err)
+	}
+	return nil
+}
+
+func (m *Model) keyOf(id string) string {
+	ks := m.reg.KeysOf(commands.Command{ID: id})
+	if len(ks) == 0 {
+		return "the palette (" + m.reg.KeysOf(commands.Command{ID: "app.palette"}).String() + ")"
+	}
+	return ks[0].Canonical()
+}
+
+// afterUpdate syncs whatever depends on the selections: the item in the
+// editor, the entries in the readers, the sitemap, the layout.
+func (m *Model) afterUpdate() tea.Cmd {
+	var cmds []tea.Cmd
+	if s, ok := m.inter.Yanked(); ok {
+		cmds = append(cmds, tea.SetClipboard(s))
+	}
+	switch m.page {
+	case pageIntercept:
+		m.inter.Show(m.currentItem())
+	case pageHistory:
+		cmds = append(cmds, m.syncReaders(m.hist, &m.histShown, m.histReq, m.histRes))
+	case pageSitemap:
+		if m.siteDirty {
+			m.tree.SetEntries(sitemap.Build(m.treeEntries()))
+			m.siteDirty = false
+		}
+		node := ""
+		if n, ok := m.tree.Selected(); ok {
+			node = n.Prefix
+		}
+		if node != m.siteNode {
+			m.siteNode = node
+			cmds = append(cmds, m.site.SetWithin(func(e project.Entry) bool {
+				return node != "" && sitemap.Under(sitemap.Path(e.URL), node)
+			}))
+		}
+		cmds = append(cmds, m.syncReaders(m.site, &m.siteShown, m.siteReq, m.siteRes))
+	case pageDiff:
+		cmds = append(cmds, m.syncDiff())
+	}
+	m.layout()
+	return tea.Batch(cmds...)
+}
+
+// currentItem is the selection of the last focused queue, or of the other
+// one if it is empty.
+func (m *Model) currentItem() *proxy.Item {
+	switch m.focus[pageIntercept] {
+	case paneRequests, paneResponses:
+		m.lastQueue = m.focus[pageIntercept]
+	case paneDetail:
+		if it := m.inter.Shown(); it != nil {
+			return it
+		}
+	}
+	first, second := &m.inter.Requests, &m.inter.Responses
+	if m.lastQueue == paneResponses {
+		first, second = second, first
+	}
+	if it := first.Selected(); it != nil {
+		return it
+	}
+	return second.Selected()
+}
+
+func (m *Model) syncReaders(l *entries.Model, shown *int, req, res *reader.Model) tea.Cmd {
+	e, ok := l.Selected()
+	if !ok {
+		if *shown != 0 {
+			*shown = 0
+			req.Clear()
+			res.Clear()
+		}
+		return nil
+	}
+	if e.ID == *shown {
+		return nil
+	}
+	*shown = e.ID
+	var cmds []tea.Cmd
+	raw, err := m.proj.ReadRequest(e.ID)
+	if err != nil {
+		req.Clear()
+		cmds = append(cmds, notify.Err(err))
+	} else {
+		cmds = append(cmds, req.Show(raw, m.noteLines(e)))
+	}
+	raw, err = m.proj.ReadResponse(e.ID)
+	switch {
+	case err != nil:
+		res.Clear()
+		cmds = append(cmds, notify.Err(err))
+	case raw == nil:
+		res.Clear()
+	default:
+		cmds = append(cmds, res.Show(raw, m.responseNotes(e)))
+	}
+	return tea.Batch(cmds...)
+}
+
+// responseNotes explain why the body is missing.
+func (m *Model) responseNotes(e project.Entry) []string {
+	switch {
+	case e.Kept != project.KeptHeaders:
+		return nil
+	case m.cfg.History.Responses == string(project.KeptHeaders):
+		return []string{"# body not stored (history.responses: headers)"}
+	case e.Len > 0:
+		return []string{"# body not stored: " + entries.Size(e.Len) + ", over history.maxBodySize"}
+	}
+	return []string{"# body not stored: streamed"}
+}
+
+// noteLines are shown as comments above the request.
+func (m *Model) noteLines(e project.Entry) []string {
+	var out []string
+	if note := m.hist.Meta(e.ID).Note; note != "" {
+		for _, l := range strings.Split(note, "\n") {
+			out = append(out, "# note: "+l)
+		}
+	}
+	if e.Edited {
+		out = append(out, "# edited")
+	}
+	if e.Source != "" {
+		out = append(out, "# "+imported(e))
+	}
+	return out
+}
+
+// imported returns "imported from katana", or "imported" for a plain URL list.
+func imported(e project.Entry) string {
+	if e.Source == "import" {
+		return "imported"
+	}
+	return "imported from " + e.Source
+}
+
+func (m *Model) noResponse(l *entries.Model) string {
+	e, ok := l.Selected()
+	switch {
+	case !ok:
+		return ""
+	case e.Error == "dropped":
+		return "Dropped"
+	case e.Error != "":
+		return "No response · " + e.Error
+	case e.Source != "" && e.Status == 0:
+		return strings.ToUpper(imported(e)[:1]) + imported(e)[1:] + " · no response"
+	case e.Kept == project.KeptStatus:
+		return fmt.Sprintf("%d · body not stored", e.Status)
+	case e.Kept == project.KeptNone:
+		return "Responses not stored"
+	}
+	return "No response"
+}
+
+func (m *Model) open() {
+	switch m.page {
+	case pageHistory:
+		m.setFocus(paneHistRequest)
+	case pageSitemap:
+		m.setFocus(paneSiteRequest)
+	}
+}
+
+func (m *Model) list() *entries.Model {
+	if m.page == pageSitemap {
+		return m.site
+	}
+	return m.hist
+}
+
+func (m *Model) askNote(e project.Entry) tea.Cmd {
+	p := prompt.New(fmt.Sprintf("Note on #%d", e.ID), m.hist.Meta(e.ID).Note, func(note string) tea.Cmd {
+		meta := m.hist.Meta(e.ID)
+		meta.Note = strings.TrimSpace(note)
+		if err := m.hist.SetMeta(e.ID, meta); err != nil {
+			return notify.Err(err)
+		}
+		m.histShown, m.siteShown = 0, 0 // redraw: the note is shown above the request
+		return tea.Batch(m.hist.Refresh(), m.site.Refresh())
+	})
+	p.Hint = "Leave empty to remove it"
+	return overlay.Open(p)
+}
+
+func (m *Model) setDiff(e project.Entry, b bool) tea.Cmd {
+	if !b {
+		m.diffA = side{e, true}
+		return notify.Info(fmt.Sprintf("Diff: #%d on the left", e.ID))
+	}
+	m.diffB = side{e, true}
+	if !m.diffA.ok {
+		return notify.Info(fmt.Sprintf("Diff: #%d on the right", e.ID))
+	}
+	m.setPage(pageDiff)
+	return nil
+}
+
+func (m *Model) diffText(e project.Entry) (string, error) {
+	var raw []byte
+	var err error
+	if m.diffResp {
+		raw, err = m.proj.ReadResponse(e.ID)
+	} else {
+		raw, err = m.proj.ReadRequest(e.ID)
+	}
+	return message.Text(raw), err
+}
+
+func (m *Model) syncDiff() tea.Cmd {
+	if !m.diffA.ok || !m.diffB.ok {
+		return nil
+	}
+	want := [2]int{m.diffA.entry.ID, m.diffB.entry.ID}
+	if m.diffResp {
+		want[0], want[1] = -want[0], -want[1]
+	}
+	if want == m.diffLoaded {
+		return nil
+	}
+	m.diffLoaded = want
+	a, err := m.diffText(m.diffA.entry)
+	if err != nil {
+		return notify.Err(err)
+	}
+	b, err := m.diffText(m.diffB.entry)
+	if err != nil {
+		return notify.Err(err)
+	}
+	m.diff.Set(a, b)
+	return nil
+}
+
+func (m *Model) steepEntry(e project.Entry) tea.Cmd {
+	raw, err := m.proj.ReadRequest(e.ID)
+	if err != nil {
+		return notify.Err(err)
+	}
+	return m.toSteep(raw, e.URL)
+}
+
+func (m *Model) toSteep(raw []byte, rawURL string) tea.Cmd {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return notify.Err(err)
+	}
+	send := func(col string) tea.Cmd {
+		name, n, err := steep.Send(col, m.cfg.Steep.Folder, raw, u)
+		if err != nil {
+			return notify.Err(fmt.Errorf("steep: %w", err))
+		}
+		if n == 0 {
+			return notify.Success("Sent to steep: " + name + " (steep not running)")
+		}
+		return notify.Success("Sent to steep: " + name)
+	}
+	cols := steep.Targets(m.cfg.Steep.Collection)
+	if len(cols) == 1 {
+		return send(cols[0])
+	}
+	// the last pick first: enter sends there again
+	if i := slices.Index(cols, m.steepLast); i > 0 {
+		last := cols[i]
+		cols = append([]string{last}, slices.Delete(cols, i, i+1)...)
+	}
+	items := make([]picker.Item, len(cols))
+	byName := map[string]string{}
+	for i, c := range cols {
+		items[i] = picker.Item{Name: shortPath(c)}
+		byName[items[i].Name] = c
+	}
+	return overlay.Open(picker.New("Send to steep", "steep", items, func(it picker.Item) tea.Cmd {
+		m.steepLast = byName[it.Name]
+		return send(m.steepLast)
+	}))
+}
+
+type forgetMsg struct{ ids []int }
+
+func (m *Model) askForget(msg entries.ForgetMsg) tea.Cmd {
+	do := func() tea.Msg { return forgetMsg{msg.IDs} }
+	if !msg.All {
+		return do
+	}
+	q := fmt.Sprintf("Delete the %s shown?", plural(len(msg.IDs), "entry", "entries"))
+	if !msg.Filtered {
+		q = fmt.Sprintf("Delete the whole history (%s)?", plural(len(msg.IDs), "entry", "entries"))
+	}
+	c := confirm.New("Delete", q, do)
+	c.Danger = true
+	return overlay.Open(c)
+}
+
+func (m *Model) forget(ids []int) tea.Cmd {
+	err := m.proj.Forget(ids)
+	m.hist.Forget(ids)
+	m.site.Forget(ids)
+	m.siteDirty = true
+	m.histShown, m.siteShown = 0, 0
+	for _, s := range []*side{&m.diffA, &m.diffB} {
+		if s.ok && slices.Contains(ids, s.entry.ID) {
+			*s = side{}
+			m.diffLoaded = [2]int{}
+		}
+	}
+	if err != nil {
+		return notify.Err(err)
+	}
+	return notify.Success("Deleted " + plural(len(ids), "entry", "entries"))
+}
+
+func (m *Model) Close() {
+	if m.px != nil {
+		m.px.Close()
+	}
+	m.proj.Close()
+}
+
+func plural(n int, one, many string) string {
+	if n == 1 {
+		return "1 " + one
+	}
+	return fmt.Sprintf("%d %s", n, many)
+}
+
+func (m *Model) quit() tea.Cmd {
+	if n := m.inter.Len(); n > 0 {
+		c := confirm.New("Quit", plural(n, "held item", "held items")+" will be dropped. Quit?", tea.Quit)
+		c.Danger = true
+		return overlay.Open(c)
+	}
+	return tea.Quit
+}
+
+func (m *Model) treeEntries() []project.Entry {
+	if m.assets {
+		return m.hist.All()
+	}
+	var out []project.Entry
+	for _, e := range m.hist.All() {
+		if !e.Asset {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+func (m *Model) toggleAssets() tea.Cmd {
+	m.assets = !m.assets
+	m.siteDirty = true
+	m.histShown, m.siteShown = 0, 0
+	return tea.Batch(m.hist.SetAssets(m.assets), m.site.SetAssets(m.assets))
+}
+
+func (m *Model) setPage(p page) {
+	m.page = p
+	m.zoomed = false
+	m.layout()
+}
+
+func (m *Model) setFocus(p pane) {
+	for pg, panes := range pagePanes {
+		for _, q := range panes {
+			if q == p {
+				m.page = page(pg)
+				m.focus[pg] = p
+			}
+		}
+	}
+	m.layout()
+}
