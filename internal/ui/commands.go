@@ -14,6 +14,7 @@ import (
 	"github.com/sectui/foam/palette"
 	"github.com/sectui/foam/prompt"
 
+	pfindings "github.com/sectui/spilltea/internal/findings"
 	"github.com/sectui/spilltea/internal/proxy"
 	"github.com/sectui/spilltea/internal/ui/intercept"
 	"github.com/sectui/spilltea/internal/ui/picker"
@@ -215,7 +216,7 @@ func (m *Model) scopes() []commands.Scope {
 	case paneDiffA, paneDiffB:
 		s = append(s, commands.Scope{Name: "Diff", Commands: m.diffCommands()})
 	case paneFindings:
-		s = append(s, commands.Scope{Name: "Findings", Commands: append(m.finds.Commands(), m.rescanCommand())})
+		s = append(s, commands.Scope{Name: "Findings", Commands: append(m.finds.Commands(), m.rescanCommand(), m.copyFindingCommand())})
 	case paneFinding:
 		s = append(s, commands.Scope{Name: "Finding", Commands: m.findView.Commands()})
 	case paneSeen:
@@ -227,6 +228,16 @@ func (m *Model) scopes() []commands.Scope {
 func (m *Model) rescanCommand() commands.Command {
 	return commands.Command{ID: "findings.rescan", Title: "Run the detectors on the whole history", When: func() bool { return !m.rescanning },
 		Run: m.rescan}
+}
+
+func (m *Model) copyFindingCommand() commands.Command {
+	return commands.Command{ID: "findings.copy", Title: "Copy the finding, in Markdown, with its first request", Help: "copy",
+		When: func() bool { _, ok := m.finds.Selected(); return ok },
+		Run: func() tea.Cmd {
+			f, _ := m.finds.Selected()
+			text := pfindings.Markdown(m.proj, f)
+			return func() tea.Msg { return copiedMsg{text, "the finding"} }
+		}}
 }
 
 func (m *Model) diffCommands() []commands.Command {
@@ -253,7 +264,7 @@ func (m *Model) allScopes() []commands.Scope {
 		{Name: "Sitemap", Commands: append(m.tree.Commands(), m.assetsCommand(), m.steepCommand())},
 		{Name: "Message", Commands: append(m.histReq.Commands(), m.steepCommand())},
 		{Name: "Diff", Commands: m.diffCommands()},
-		{Name: "Findings", Commands: append(m.finds.Commands(), m.rescanCommand())},
+		{Name: "Findings", Commands: append(m.finds.Commands(), m.rescanCommand(), m.copyFindingCommand())},
 		{Name: "Finding", Commands: m.findView.Commands()},
 		help.New(nil).Scope(),
 		palette.New(nil, "").Scope(),

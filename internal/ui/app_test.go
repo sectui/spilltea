@@ -669,3 +669,16 @@ func TestRescan(t *testing.T) {
 		t.Fatalf("second scan:\n%s", screen(m))
 	}
 }
+
+func TestCopyFinding(t *testing.T) {
+	e := newEnv(t, func(c *config.Config) { c.Findings.Secrets = true })
+	m := e.m
+	<-e.get("/me?user=" + slackToken)
+	e.next(t, reflect.TypeFor[proxy.EntryMsg]())
+	e.next(t, reflect.TypeFor[proxy.FindingMsg]())
+	key(m, '5', tea.ModAlt)
+	typeKeys(m, "y")
+	if !strings.Contains(screen(m), "Copied the finding") {
+		t.Fatalf("y copies:\n%s", screen(m))
+	}
+}

@@ -134,6 +134,7 @@ keys: # a key, a list, or [] for palette only; printable keys go to the intercep
     note: n
     triaged: t
     rescan: R
+    copy: y
   copy:
     close: [esc, ctrl+c]
     pick: enter
