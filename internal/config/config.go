@@ -112,6 +112,7 @@ type Findings struct {
 	Cookies    bool `koanf:"cookies"`
 	CORS       bool `koanf:"cors"`
 	Disclosure bool `koanf:"disclosure"`
+	Reflection bool `koanf:"reflection"`
 }
 
 type Rule struct {

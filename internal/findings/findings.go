@@ -39,6 +39,9 @@ func Detectors(cfg config.Findings) ([]Detector, error) {
 	if cfg.Disclosure {
 		out = append(out, Disclosure{})
 	}
+	if cfg.Reflection {
+		out = append(out, Reflection{})
+	}
 	return out, nil
 }
 

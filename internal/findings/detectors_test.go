@@ -110,3 +110,55 @@ func TestDisclosure(t *testing.T) {
 		}
 	}
 }
+
+func TestReflection(t *testing.T) {
+	page := `<html><head><title>q</title>
+<meta property="og:url" content="https://a.test/search?q=hunter42">
+<link rel="canonical" href="https://a.test/search?q=hunter42">
+<script id="__NEXT_DATA__" type="application/json">{"query":{"q":"hunter42","nextOnly":"zebra77"}}</script>
+<script>self.__next_f.push([1,"hunter42 zebra77"])</script>
+<style>.x{content:"styled99"}</style>
+</head><body>
+<h1>Results for hunter42</h1>
+<a href="/next?q=hunter42">more</a>
+<img src=x onerror="track('evt5555')">
+<script>var term = "inline88";</script>
+<!-- debug: cmt7777 -->
+<p>page 1234 sort desc styled99</p>
+</body></html>`
+	u, _ := url.Parse("https://a.test/search?q=hunter42&page=1234&sort=desc&n=zebra77&e=evt5555&s=inline88&c=cmt7777&st=styled99&miss=absent00")
+	req := &message.Request{Method: "GET", URL: u, Header: http.Header{}}
+	resp := response("Content-Type", "text/html; charset=utf-8")
+	resp.Body = []byte(page)
+	var got []string
+	for _, h := range (Reflection{}).Detect(req, resp) {
+		got = append(got, h.Title)
+	}
+	want := []string{
+		"c reflected in comment",
+		"e reflected in event handler",
+		"q reflected in text, href",
+		"s reflected in script",
+		"st reflected in text",
+	}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("got:\n%s", strings.Join(got, "\n"))
+	}
+
+	form := request(t, "https://a.test/login", "Content-Type", "application/x-www-form-urlencoded")
+	form.Body = []byte("user=alice99&remember=true")
+	resp.Body = []byte(`<input name="user" value="alice99">`)
+	if hits := (Reflection{}).Detect(form, resp); len(hits) != 1 || hits[0].Title != "user reflected in attribute" || hits[0].Key != "a.test/login:user" {
+		t.Fatalf("form: %+v", hits)
+	}
+	j := request(t, "https://a.test/api", "Content-Type", "application/json")
+	j.Body = []byte(`{"profile":{"name":"bobby99"},"tags":["tagged1"]}`)
+	resp.Body = []byte(`<p>bobby99 tagged1</p>`)
+	if hits := (Reflection{}).Detect(j, resp); len(hits) != 2 || hits[0].Title != "profile.name reflected in text" || hits[1].Title != "tags reflected in text" {
+		t.Fatalf("json: %+v", hits)
+	}
+	resp.Header.Set("Content-Type", "application/json")
+	if hits := (Reflection{}).Detect(j, resp); len(hits) != 0 {
+		t.Fatalf("not HTML: %+v", hits)
+	}
+}

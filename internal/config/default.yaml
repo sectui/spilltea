@@ -49,6 +49,7 @@ findings: # assets included
   cookies: false # no Secure, no HttpOnly, SameSite=None
   cors: false # credentials allowed for a specific origin
   disclosure: false # stack traces, SQL errors, source maps, versions in headers
+  reflection: false # parameters found as is in an HTML response, with where
 
 rules: [] # e.g. {on: request, part: head, match: "(?m)^Accept-Encoding:.*$", replace: "Accept-Encoding: identity"}; an empty match adds replace as a header
 
