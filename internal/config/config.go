@@ -108,6 +108,8 @@ type History struct {
 
 type Findings struct {
 	Secrets bool `koanf:"secrets"`
+	Cookies bool `koanf:"cookies"`
+	CORS    bool `koanf:"cors"`
 }
 
 type Rule struct {

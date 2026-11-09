@@ -45,6 +45,8 @@ history:
 
 findings: # assets included
   secrets: true # gitleaks rules
+  cookies: false # no Secure, no HttpOnly, SameSite=None
+  cors: false # credentials allowed for a specific origin
 
 rules: [] # e.g. {on: request, part: head, match: "(?m)^Accept-Encoding:.*$", replace: "Accept-Encoding: identity"}; an empty match adds replace as a header
 

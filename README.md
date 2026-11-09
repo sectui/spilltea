@@ -118,6 +118,8 @@ included, even when their body is not stored:
 ```yaml
 findings:
     secrets: true # API keys, tokens...
+    cookies: true # no Secure, no HttpOnly, SameSite=None
+    cors: true    # credentials allowed for a specific origin
 ```
 
 In the history, `row.finding.eq:"secrets"` or `row.finding.cont:"aws"` filter

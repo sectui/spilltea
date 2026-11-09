@@ -31,6 +31,12 @@ func Detectors(cfg config.Findings) ([]Detector, error) {
 		}
 		out = append(out, d)
 	}
+	if cfg.Cookies {
+		out = append(out, Cookies{})
+	}
+	if cfg.CORS {
+		out = append(out, CORS{})
+	}
 	return out, nil
 }
 
