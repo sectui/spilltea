@@ -119,7 +119,7 @@ included, even when their body is not stored:
 findings:
     secrets: true # API keys, tokens...
     cookies: true # no Secure, no HttpOnly, SameSite=None
-    cors: true    # credentials allowed for a specific origin
+    cors: true # credentials allowed for a specific origin
     disclosure: true # stack traces, SQL errors, source maps, versions
     reflection: true # parameters found as is in an HTML response
 ```

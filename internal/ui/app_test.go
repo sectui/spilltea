@@ -644,3 +644,28 @@ func TestFindings(t *testing.T) {
 		t.Fatalf("findings preset: %+v", es)
 	}
 }
+
+func TestRescan(t *testing.T) {
+	e := newEnv(t, func(c *config.Config) { c.Findings.Secrets = false })
+	m := e.m
+	<-e.get("/me?user=" + slackToken)
+	e.next(t, reflect.TypeFor[proxy.EntryMsg]())
+	key(m, '5', tea.ModAlt)
+	typeKeys(m, "R")
+	if !strings.Contains(screen(m), "No detector is on") {
+		t.Fatalf("no detector:\n%s", screen(m))
+	}
+	m.cfg.Findings.Secrets = true
+	typeKeys(m, "R")
+	f, ok := m.finds.Selected()
+	if !ok || f.Title != "slack-bot-token" || len(f.Entries) != 1 || f.Entries[0] != 2 || m.rescanning {
+		t.Fatalf("%+v", f)
+	}
+	if !strings.Contains(screen(m), "Scan done, 1 request with new findings") {
+		t.Fatalf("toast:\n%s", screen(m))
+	}
+	typeKeys(m, "R")
+	if !strings.Contains(screen(m), "nothing new") {
+		t.Fatalf("second scan:\n%s", screen(m))
+	}
+}

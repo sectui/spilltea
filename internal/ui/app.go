@@ -22,6 +22,7 @@ import (
 	"github.com/sectui/foam/viewer"
 
 	"github.com/sectui/spilltea/internal/config"
+	pfindings "github.com/sectui/spilltea/internal/findings"
 	"github.com/sectui/spilltea/internal/message"
 	"github.com/sectui/spilltea/internal/project"
 	"github.com/sectui/spilltea/internal/proxy"
@@ -113,10 +114,11 @@ type Model struct {
 	diffResp   bool // compare responses instead of requests
 	diffLoaded [2]int
 
-	finds     *findings.Model
-	findView  viewer.Model
-	seen      *entries.Model
-	findShown string
+	finds      *findings.Model
+	findView   viewer.Model
+	seen       *entries.Model
+	findShown  string
+	rescanning bool
 
 	assets bool // shown in the history and the sitemap
 
@@ -283,6 +285,8 @@ func (m *Model) update(msg tea.Msg) tea.Cmd {
 		m.setFocus(paneSeen)
 	case findings.NoteMsg:
 		return m.askFindingNote(msg.Finding)
+	case rescannedMsg:
+		return m.rescanned(msg)
 	case ftree.OpenMsg:
 		m.setFocus(paneSite)
 	case copiedMsg:
@@ -563,6 +567,42 @@ func (m *Model) syncFinding() tea.Cmd {
 		in[id] = true
 	}
 	return m.seen.SetWithin(func(e project.Entry) bool { return in[e.ID] })
+}
+
+type rescannedMsg struct {
+	changed int
+	err     error
+}
+
+func (m *Model) rescan() tea.Cmd {
+	ds, err := pfindings.Detectors(m.cfg.Findings)
+	if err != nil {
+		return notify.Err(err)
+	}
+	if len(ds) == 0 {
+		return notify.Warning("No detector is on, see findings in the config")
+	}
+	m.rescanning = true
+	es, proj := slices.Clone(m.hist.All()), m.proj
+	return tea.Batch(notify.Info("Scanning "+plural(len(es), "entry", "entries")), func() tea.Msg {
+		n, err := pfindings.Rescan(proj, ds, es)
+		return rescannedMsg{n, err}
+	})
+}
+
+func (m *Model) rescanned(msg rescannedMsg) tea.Cmd {
+	m.rescanning = false
+	if err := m.finds.Reload(); err != nil {
+		return notify.Err(err)
+	}
+	m.findShown = ""
+	if msg.err != nil {
+		return notify.Err(msg.err)
+	}
+	if msg.changed == 0 {
+		return notify.Info("Scan done, nothing new")
+	}
+	return notify.Success("Scan done, " + plural(msg.changed, "request", "requests") + " with new findings")
 }
 
 func (m *Model) askFindingNote(f project.Finding) tea.Cmd {

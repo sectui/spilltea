@@ -2,6 +2,7 @@
 package findings
 
 import (
+	"cmp"
 	"time"
 
 	"github.com/sectui/spilltea/internal/config"
@@ -60,7 +61,7 @@ func (h *Handler) Handle(e project.Entry, req *message.Request, resp *message.Re
 	for _, d := range h.ds {
 		for _, hit := range d.Detect(req, resp) {
 			ok, err := h.p.AddSighting(project.Sighting{Key: d.Name() + ":" + hit.Key, Detector: d.Name(),
-				Title: hit.Title, Detail: hit.Detail, Entry: e.ID, Time: time.Now()})
+				Title: hit.Title, Detail: hit.Detail, Entry: e.ID, Time: cmp.Or(e.Time, time.Now())})
 			if err != nil {
 				h.changed(err)
 			}

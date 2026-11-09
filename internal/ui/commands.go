@@ -215,13 +215,18 @@ func (m *Model) scopes() []commands.Scope {
 	case paneDiffA, paneDiffB:
 		s = append(s, commands.Scope{Name: "Diff", Commands: m.diffCommands()})
 	case paneFindings:
-		s = append(s, commands.Scope{Name: "Findings", Commands: m.finds.Commands()})
+		s = append(s, commands.Scope{Name: "Findings", Commands: append(m.finds.Commands(), m.rescanCommand())})
 	case paneFinding:
 		s = append(s, commands.Scope{Name: "Finding", Commands: m.findView.Commands()})
 	case paneSeen:
 		s = append(s, commands.Scope{Name: "Seen in", Commands: m.seen.Commands()})
 	}
 	return s
+}
+
+func (m *Model) rescanCommand() commands.Command {
+	return commands.Command{ID: "findings.rescan", Title: "Run the detectors on the whole history", When: func() bool { return !m.rescanning },
+		Run: m.rescan}
 }
 
 func (m *Model) diffCommands() []commands.Command {
@@ -248,7 +253,7 @@ func (m *Model) allScopes() []commands.Scope {
 		{Name: "Sitemap", Commands: append(m.tree.Commands(), m.assetsCommand(), m.steepCommand())},
 		{Name: "Message", Commands: append(m.histReq.Commands(), m.steepCommand())},
 		{Name: "Diff", Commands: m.diffCommands()},
-		{Name: "Findings", Commands: m.finds.Commands()},
+		{Name: "Findings", Commands: append(m.finds.Commands(), m.rescanCommand())},
 		{Name: "Finding", Commands: m.findView.Commands()},
 		help.New(nil).Scope(),
 		palette.New(nil, "").Scope(),
