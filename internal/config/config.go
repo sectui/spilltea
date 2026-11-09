@@ -107,9 +107,10 @@ type History struct {
 }
 
 type Findings struct {
-	Secrets bool `koanf:"secrets"`
-	Cookies bool `koanf:"cookies"`
-	CORS    bool `koanf:"cors"`
+	Secrets    bool `koanf:"secrets"`
+	Cookies    bool `koanf:"cookies"`
+	CORS       bool `koanf:"cors"`
+	Disclosure bool `koanf:"disclosure"`
 }
 
 type Rule struct {

@@ -74,3 +74,39 @@ func TestCORS(t *testing.T) {
 		}
 	}
 }
+
+func TestDisclosure(t *testing.T) {
+	titles := func(hits []Hit) []string {
+		var out []string
+		for _, h := range hits {
+			out = append(out, h.Title)
+		}
+		return out
+	}
+	body := func(resp *message.Response, b string) *message.Response {
+		resp.Body = []byte(b)
+		return resp
+	}
+	for name, c := range map[string]struct {
+		url  string
+		resp *message.Response
+		want string
+	}{
+		"server version": {"https://a.test/", response("Server", "nginx/1.18.0", "X-Powered-By", "Express"), "Server: nginx/1.18.0"},
+		"java":           {"https://a.test/x", body(response("Content-Type", "text/html"), "<pre>java.lang.NullPointerException\n\tat com.acme.Foo.bar(Foo.java:42)</pre>"), "Java stack trace"},
+		"python":         {"https://a.test/x", body(response(), "Traceback (most recent call last):\n  File \"app.py\""), "Python traceback"},
+		"php":            {"https://a.test/x", body(response(), "<b>Warning</b>:  mysql_fetch_array() expects parameter 1 in <b>/var/www/a.php</b> on line <b>12</b>"), "MySQL error,PHP error"},
+		"node":           {"https://a.test/x", body(response("Content-Type", "text/plain"), "TypeError: x is undefined\n    at handler (/app/server.js:10:5)"), "Node.js stack trace"},
+		"mysql":          {"https://a.test/item?id=1'", body(response(), "You have an error in your SQL syntax; check the manual"), "MySQL error"},
+		"oracle":         {"https://a.test/x", body(response(), "ORA-01756: quoted string not properly terminated"), "Oracle error"},
+		"source map":     {"https://a.test/main.js.map", body(response("Content-Type", "application/json"), `{"version":3,"sources":["src/app.ts"],"mappings":"AAAA"}`), "source map"},
+		"map not a map":  {"https://a.test/x.map", body(response("Content-Type", "text/html"), "<html>not found</html>"), ""},
+		"js is skipped":  {"https://a.test/app.js", body(response("Content-Type", "text/javascript"), `throw new Error("java.lang.NullPointerException at x.y(Foo.java:1)")`), ""},
+		"nothing":        {"https://a.test/x", body(response("Server", "cloudflare"), "<html>hello</html>"), ""},
+	} {
+		got := strings.Join(titles(Disclosure{}.Detect(request(t, c.url), c.resp)), ",")
+		if got != c.want {
+			t.Errorf("%s: %q, want %q", name, got, c.want)
+		}
+	}
+}
