@@ -1,6 +1,7 @@
 package project
 
 import (
+	"os"
 	"testing"
 	"time"
 )
@@ -52,4 +53,50 @@ func sight(t *testing.T, p *Project, key string, entry int) bool {
 		t.Fatal(err)
 	}
 	return ok
+}
+
+func TestForgetSightings(t *testing.T) {
+	root := t.TempDir()
+	p, _ := Open(root)
+	var ids []int
+	for range 3 {
+		e, _ := p.Add(Entry{Method: "GET", URL: "https://a.test/"}, []byte("GET / HTTP/1.1\r\n\r\n"), nil)
+		ids = append(ids, e.ID)
+	}
+	sight(t, p, "a", ids[0])
+	sight(t, p, "a", ids[2])
+	sight(t, p, "b", ids[2])
+	if err := p.Forget([]int{ids[2]}); err != nil {
+		t.Fatal(err)
+	}
+	if fs, _ := p.Findings(); len(fs) != 1 || fs[0].Key != "a" || len(fs[0].Entries) != 1 {
+		t.Fatalf("%+v", fs)
+	}
+	p.Close()
+
+	q, _ := Open(root)
+	e, _ := q.Add(Entry{Method: "GET", URL: "https://a.test/new"}, []byte("GET /new HTTP/1.1\r\n\r\n"), nil)
+	if e.ID != ids[2] {
+		t.Fatalf("the ID is not reused: %d", e.ID)
+	}
+	if got := q.FindingsOf(e.ID); len(got) != 0 {
+		t.Fatalf("the new entry has the findings of the forgotten one: %+v", got)
+	}
+}
+
+func TestTruncatedSighting(t *testing.T) {
+	root := t.TempDir()
+	p, _ := Open(root)
+	sight(t, p, "a", 1)
+	p.Close()
+	f, _ := os.OpenFile(p.dir("findings.jsonl"), os.O_APPEND|os.O_WRONLY, 0)
+	f.WriteString(`{"key":"b","detector":"secrets","tit`)
+	f.Close()
+	q, _ := Open(root)
+	sight(t, q, "c", 2)
+	q.Close()
+	r, _ := Open(root)
+	if fs, _ := r.Findings(); len(fs) != 2 || fs[1].Key != "c" {
+		t.Fatalf("%+v", fs)
+	}
 }

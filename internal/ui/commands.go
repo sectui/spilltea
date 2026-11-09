@@ -218,7 +218,8 @@ func (m *Model) scopes() []commands.Scope {
 	case paneFindings:
 		s = append(s, commands.Scope{Name: "Findings", Commands: append(m.finds.Commands(), m.rescanCommand(), m.copyFindingCommand())})
 	case paneFinding:
-		s = append(s, commands.Scope{Name: "Finding", Commands: m.findView.Commands()})
+		s = append(s, commands.Scope{Name: "Finding", Commands: append(m.findView.Commands(),
+			append(m.finds.TriageCommands(), m.copyFindingCommand())...)})
 	case paneSeen:
 		s = append(s, commands.Scope{Name: "Seen in", Commands: m.seen.Commands()})
 	}
@@ -265,7 +266,7 @@ func (m *Model) allScopes() []commands.Scope {
 		{Name: "Message", Commands: append(m.histReq.Commands(), m.steepCommand())},
 		{Name: "Diff", Commands: m.diffCommands()},
 		{Name: "Findings", Commands: append(m.finds.Commands(), m.rescanCommand(), m.copyFindingCommand())},
-		{Name: "Finding", Commands: m.findView.Commands()},
+		{Name: "Finding", Commands: append(m.findView.Commands(), append(m.finds.TriageCommands(), m.copyFindingCommand())...)},
 		help.New(nil).Scope(),
 		palette.New(nil, "").Scope(),
 		confirm.New("", "", nil).Scope(),

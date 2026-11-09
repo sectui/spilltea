@@ -2,6 +2,7 @@ package ui
 
 import (
 	"io"
+	"maps"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -9,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -43,6 +45,13 @@ func newEnv(t *testing.T, edit func(*config.Config)) *env {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, ".html") {
+			w.Header().Set("Content-Type", "text/html")
+			w.Header().Add("Set-Cookie", "sid=abc; Path=/")
+			io.WriteString(w, "<html><body><h1>"+strings.Join(slices.Collect(maps.Keys(r.URL.Query())), " ")+"</h1><p>"+r.URL.RawQuery+"</p>"+
+				"<pre>java.lang.NullPointerException\n\tat com.acme.Foo.bar(Foo.java:42)</pre></body></html>")
+			return
+		}
 		if strings.HasSuffix(r.URL.Path, ".js") {
 			w.Header().Set("Content-Type", "text/javascript")
 			io.WriteString(w, `const cfg={slack:"`+slackToken+`"};`)
@@ -633,10 +642,10 @@ func TestFindings(t *testing.T) {
 		t.Fatalf("focus %v", m.focus[pageFindings])
 	}
 	key(m, tea.KeyEnter, 0)
-	if sel, ok := m.hist.Selected(); m.page != pageHistory || !ok || sel.ID != 3 || !m.assets {
+	if sel, ok := m.hist.Selected(); m.page != pageHistory || !ok || sel.ID != 2 || !m.assets {
 		t.Fatalf("page %v, selected %+v", m.page, sel)
 	}
-	if !strings.Contains(screen(m), "vendor.js slack-bot-token") || !strings.Contains(screen(m), "# finding: slack-bot-token (secrets)") {
+	if !strings.Contains(screen(m), "app.js slack-bot-token") || !strings.Contains(screen(m), "# finding: slack-bot-token (secrets)") {
 		t.Fatalf("history:\n%s", screen(m))
 	}
 	drain(m, m.hist.SetFilter(`preset:"findings"`), 0)
@@ -680,5 +689,59 @@ func TestCopyFinding(t *testing.T) {
 	typeKeys(m, "y")
 	if !strings.Contains(screen(m), "Copied the finding") {
 		t.Fatalf("y copies:\n%s", screen(m))
+	}
+}
+
+func TestFindingsLive(t *testing.T) {
+	e := newEnv(t, func(c *config.Config) { c.Findings.Secrets = true })
+	m := e.m
+	drain(m, m.hist.SetFilter(`preset:"findings"`), 0)
+	typeKeys(m, "A")
+	for _, p := range []string{"/app.js", "/vendor.js"} {
+		<-e.get(p)
+		e.next(t, reflect.TypeFor[proxy.EntryMsg]())
+		e.next(t, reflect.TypeFor[proxy.FindingMsg]())
+	}
+	if n := len(m.hist.Shown()); n != 2 {
+		t.Fatalf("the filter is not refreshed as findings come: %d shown", n)
+	}
+
+	key(m, '5', tea.ModAlt)
+	key(m, tea.KeyEnter, 0)
+	typeKeys(m, "j")
+	if sel, _ := m.seen.Selected(); sel.ID != 3 {
+		t.Fatalf("selected #%d", sel.ID)
+	}
+	<-e.get("/more.js")
+	e.next(t, reflect.TypeFor[proxy.EntryMsg]())
+	e.next(t, reflect.TypeFor[proxy.FindingMsg]())
+	if sel, _ := m.seen.Selected(); sel.ID != 3 || len(m.seen.Shown()) != 3 {
+		t.Fatalf("selection lost: #%d of %d", sel.ID, len(m.seen.Shown()))
+	}
+}
+
+func TestTriageFromDetail(t *testing.T) {
+	e := newEnv(t, func(c *config.Config) { c.Findings.Secrets = true })
+	m := e.m
+	<-e.get("/app.js")
+	e.next(t, reflect.TypeFor[proxy.EntryMsg]())
+	e.next(t, reflect.TypeFor[proxy.FindingMsg]())
+	key(m, '5', tea.ModAlt)
+	m.setFocus(paneFinding)
+	typeKeys(m, "x")
+	if m.finds.Untriaged() != 0 {
+		t.Fatal("x triages from the detail")
+	}
+}
+
+func TestFindingDetailSanitized(t *testing.T) {
+	e := newEnv(t, func(c *config.Config) { c.Findings = config.Findings{Disclosure: true} })
+	m := e.m
+	<-e.get("/p.html?%1b%5b31mevil=zzzz9999")
+	e.next(t, reflect.TypeFor[proxy.EntryMsg]())
+	e.next(t, reflect.TypeFor[proxy.FindingMsg]())
+	key(m, '5', tea.ModAlt)
+	if v := m.View().Content; strings.Contains(v, "\x1b[31mevil") {
+		t.Fatal("an escape sequence from the server reaches the terminal")
 	}
 }

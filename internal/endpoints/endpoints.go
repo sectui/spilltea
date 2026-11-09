@@ -59,7 +59,7 @@ func (h *Handler) Handle(e project.Entry, req *message.Request, resp *message.Re
 	}
 	// relative paths are fetched from the page, not from the script
 	base := req.URL
-	if ref, err := url.Parse(req.Header.Get("Referer")); err == nil && ref.Host != "" {
+	if ref, err := url.Parse(req.Header.Get("Referer")); err == nil && ref.Host != "" && (ref.Scheme == "http" || ref.Scheme == "https") {
 		base = ref
 	}
 	for _, ep := range eps {
@@ -218,7 +218,12 @@ func template(n *js.TemplateExpr) string {
 		tail = strings.TrimPrefix(tail, "`")
 	}
 	b.WriteString(strings.TrimSuffix(tail, "`"))
-	return b.String()
+	s := b.String()
+	for strings.Contains(s, "{}{}") {
+		s = strings.ReplaceAll(s, "{}{}", "{}")
+	}
+	// `${apiBase}/users`
+	return strings.TrimPrefix(s, "{}")
 }
 
 func unquote(b []byte) string {
@@ -266,8 +271,12 @@ var (
 )
 
 func endpoint(s string) bool {
-	if len(s) < 3 || len(s) > 300 || !strings.Contains(s, "/") || strings.HasPrefix(s, "//") || !strings.ContainsFunc(s, isLetter) {
+	if len(s) < 3 || len(s) > 300 || !strings.Contains(s, "/") || !strings.ContainsFunc(s, isLetter) {
 		return false
+	}
+	if strings.HasPrefix(s, "//") {
+		host, _, _ := strings.Cut(s[2:], "/")
+		return strings.Contains(host, ".") && endpoint("https:"+s)
 	}
 	if rest, ok := strings.CutPrefix(s, "https://"); ok || strings.HasPrefix(s, "http://") {
 		if !ok {

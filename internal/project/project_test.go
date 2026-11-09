@@ -110,3 +110,11 @@ func TestAddTwoProcesses(t *testing.T) {
 		t.Fatalf("%d entries", len(es))
 	}
 }
+
+func TestAddAfterClose(t *testing.T) {
+	p, _ := Open(t.TempDir())
+	p.Close()
+	if _, err := p.Add(Entry{Method: "GET"}, []byte("x"), nil); err == nil {
+		t.Fatal("Add after Close")
+	}
+}

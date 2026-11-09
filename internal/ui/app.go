@@ -13,6 +13,7 @@ import (
 
 	"github.com/sectui/foam/commands"
 	"github.com/sectui/foam/confirm"
+	"github.com/sectui/foam/draw"
 	"github.com/sectui/foam/geom"
 	"github.com/sectui/foam/notify"
 	"github.com/sectui/foam/overlay"
@@ -113,11 +114,14 @@ type Model struct {
 	diffB      side
 	diffResp   bool // compare responses instead of requests
 	diffLoaded [2]int
+	diffing    bool
 
 	finds      *findings.Model
 	findView   viewer.Model
 	seen       *entries.Model
-	findShown  string
+	findKey    string
+	findSig    string
+	seenIn     map[int]bool
 	rescanning bool
 
 	assets bool // shown in the history and the sitemap
@@ -285,8 +289,14 @@ func (m *Model) update(msg tea.Msg) tea.Cmd {
 		m.setFocus(paneSeen)
 	case findings.NoteMsg:
 		return m.askFindingNote(msg.Finding)
+	case findings.TriagedMsg:
+		return m.hist.RefreshCheap()
 	case rescannedMsg:
 		return m.rescanned(msg)
+	case diffedMsg:
+		if msg.want == m.diffLoaded {
+			m.diff, m.diffing = msg.d, false
+		}
 	case ftree.OpenMsg:
 		m.setFocus(paneSite)
 	case copiedMsg:
@@ -326,10 +336,11 @@ func (m *Model) event(ev any) tea.Cmd {
 		if err := m.finds.Reload(); err != nil {
 			return notify.Err(err)
 		}
-		m.findShown = ""
+		cmd := m.hist.RefreshCheap()
 		if before == 0 && m.finds.Untriaged() > 0 && m.page != pageFindings {
-			return notify.Info("New finding · " + m.keyOf("page.findings"))
+			return tea.Batch(cmd, notify.Info("New finding · "+m.keyOf("page.findings")))
 		}
+		return cmd
 	case proxy.ErrorMsg:
 		return notify.Err(ev.Err)
 	}
@@ -516,8 +527,8 @@ func (m *Model) showInHistory(e project.Entry) tea.Cmd {
 	if !m.hist.SelectID(e.ID) && e.Asset && !m.assets {
 		cmds = append(cmds, m.toggleAssets())
 	}
-	if !m.hist.SelectID(e.ID) {
-		cmds = append(cmds, m.hist.SetFilter(""))
+	if !m.hist.SelectID(e.ID) && m.hist.Filter() != "" {
+		cmds = append(cmds, m.hist.SetFilter(""), notify.Info(fmt.Sprintf("Filter cleared to show #%d", e.ID)))
 	}
 	m.hist.SelectID(e.ID)
 	m.setFocus(paneHistory)
@@ -536,37 +547,41 @@ func (m *Model) list() *entries.Model {
 
 func (m *Model) syncFinding() tea.Cmd {
 	f, ok := m.finds.Selected()
-	shown := ""
-	if ok {
-		shown = fmt.Sprintf("%s %d %v", f.Key, len(f.Entries), f.Triage)
-	}
-	if shown == m.findShown {
+	sig := fmt.Sprint(f.Entries, f.Triage, f.Last)
+	if f.Key == m.findKey && sig == m.findSig {
 		return nil
 	}
-	if !ok || !strings.HasPrefix(m.findShown, f.Key+" ") {
-		m.findView.Top()
+	same := f.Key == m.findKey
+	m.findKey, m.findSig = f.Key, sig
+	m.seenIn = map[int]bool{}
+	for _, id := range f.Entries {
+		m.seenIn[id] = true
 	}
-	m.findShown = shown
 	if !ok {
 		m.findView.SetContent(nil, nil)
-		return m.seen.SetWithin(func(project.Entry) bool { return false })
+	} else {
+		plain := findings.Detail(f)
+		for i, l := range plain {
+			plain[i] = viewer.Sanitize(l)
+		}
+		styled := slices.Clone(plain)
+		styled[0] = theme.Primary().Style().Bold(true).Render(plain[0])
+		for i := 1; i < len(styled) && plain[i] != ""; i++ {
+			styled[i] = theme.Subtle().Render(plain[i])
+		}
+		m.findView.SetContent(plain, styled)
 	}
-	exists := map[int]bool{}
-	for _, e := range m.hist.All() {
-		exists[e.ID] = true
+	in := m.seenIn
+	within := func(e project.Entry) bool { return in[e.ID] }
+	if same {
+		return m.seen.Rewithin(within)
 	}
-	plain := findings.Detail(f, func(id int) bool { return !exists[id] })
-	styled := slices.Clone(plain)
-	styled[0] = theme.Primary().Style().Bold(true).Render(plain[0])
-	for i := 1; i < len(styled) && plain[i] != ""; i++ {
-		styled[i] = theme.Subtle().Render(plain[i])
+	m.findView.Top()
+	cmd := m.seen.SetWithin(within)
+	if ok {
+		m.seen.SelectID(f.Entries[0])
 	}
-	m.findView.SetContent(plain, styled)
-	in := map[int]bool{}
-	for _, id := range f.Entries {
-		in[id] = true
-	}
-	return m.seen.SetWithin(func(e project.Entry) bool { return in[e.ID] })
+	return cmd
 }
 
 type rescannedMsg struct {
@@ -595,7 +610,6 @@ func (m *Model) rescanned(msg rescannedMsg) tea.Cmd {
 	if err := m.finds.Reload(); err != nil {
 		return notify.Err(err)
 	}
-	m.findShown = ""
 	if msg.err != nil {
 		return notify.Err(msg.err)
 	}
@@ -606,7 +620,7 @@ func (m *Model) rescanned(msg rescannedMsg) tea.Cmd {
 }
 
 func (m *Model) askFindingNote(f project.Finding) tea.Cmd {
-	p := prompt.New("Note on "+f.Title, f.Note, func(note string) tea.Cmd {
+	p := prompt.New("Note on "+draw.Clean(f.Title), f.Note, func(note string) tea.Cmd {
 		return m.finds.SetTriage(f.Key, project.Triage{Status: f.Status, Note: strings.TrimSpace(note)})
 	})
 	p.Hint = "Leave empty to remove it"
@@ -671,8 +685,17 @@ func (m *Model) syncDiff() tea.Cmd {
 	if err != nil {
 		return notify.Err(err)
 	}
-	m.diff.Set(a, b)
-	return nil
+	m.diffing = true
+	return func() tea.Msg {
+		d := diff.New()
+		d.Set(a, b)
+		return diffedMsg{want, d}
+	}
+}
+
+type diffedMsg struct {
+	want [2]int
+	d    *diff.Model
 }
 
 func (m *Model) steepEntry(e project.Entry) tea.Cmd {
@@ -740,7 +763,9 @@ func (m *Model) forget(ids []int) tea.Cmd {
 	m.hist.Forget(ids)
 	m.site.Forget(ids)
 	m.seen.Forget(ids)
-	m.findShown = ""
+	if ferr := m.finds.Reload(); err == nil {
+		err = ferr
+	}
 	m.siteDirty = true
 	m.histShown, m.siteShown = 0, 0
 	for _, s := range []*side{&m.diffA, &m.diffB} {

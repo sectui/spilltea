@@ -113,7 +113,7 @@ func (p *Project) AddSighting(s Sighting) (bool, error) {
 	}
 	f := &p.findings
 	if f.file == nil {
-		w, err := os.OpenFile(p.dir("findings.jsonl"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+		w, err := openLines(p.dir("findings.jsonl"))
 		if err != nil {
 			return true, err
 		}
@@ -125,6 +125,36 @@ func (p *Project) AddSighting(s Sighting) (bool, error) {
 	}
 	_, err = f.file.Write(append(b, '\n'))
 	return true, err
+}
+
+// IDs come back after a Forget: a sighting must not stick to a new entry.
+func (p *Project) forgetSightings(drop map[int]bool) error {
+	p.fmu.Lock()
+	defer p.fmu.Unlock()
+	b, err := os.ReadFile(p.dir("findings.jsonl"))
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	var kept []byte
+	for _, line := range splitLines(b) {
+		var s Sighting
+		if json.Unmarshal(line, &s) == nil && drop[s.Entry] {
+			continue
+		}
+		kept = append(append(kept, line...), '\n')
+	}
+	if len(kept) == len(b) {
+		return nil
+	}
+	if p.findings.file != nil {
+		p.findings.file.Close()
+		p.findings.file = nil
+	}
+	p.findings.loaded = false
+	return writeAtomic(p.dir("findings.jsonl"), kept)
 }
 
 func (p *Project) Findings() ([]Finding, error) {

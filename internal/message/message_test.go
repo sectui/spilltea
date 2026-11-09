@@ -70,7 +70,20 @@ func TestParseRequestTarget(t *testing.T) {
 			t.Errorf("%q: accepted, URL %s", target, r.URL)
 		}
 	}
-	if _, err := ParseRequest([]byte("OPTIONS * HTTP/1.1\nHost: a.test\n\n"), "https"); err != nil {
-		t.Errorf("OPTIONS *: %v", err)
+	r, err := ParseRequest([]byte("OPTIONS * HTTP/1.1\nHost: a.test\n\n"), "https")
+	if err != nil || r.URL.Host != "a.test" || !strings.HasPrefix(string(r.Bytes()), "OPTIONS * HTTP/1.1") {
+		t.Errorf("OPTIONS *: %v %+v", err, r)
+	}
+	for _, host := range []string{"evil.test/x", "a@evil.test", "a.test?x", "/"} {
+		if r, err := ParseRequest([]byte("GET / HTTP/1.1\nHost: "+host+"\n\n"), "https"); err == nil {
+			t.Errorf("Host %q: accepted, URL %s", host, r.URL)
+		}
+	}
+	if _, err := ParseRequest([]byte("GET http:// HTTP/1.1\n\n"), "https"); err == nil {
+		t.Error("an absolute target without a host is accepted")
+	}
+	r, err = ParseRequest([]byte("GET http://a.test/x HTTP/1.1\nHost: b.test\n\n"), "https")
+	if err != nil || r.Header.Get("Host") != "a.test" {
+		t.Errorf("the target's host wins: %v %v", err, r.Header)
 	}
 }

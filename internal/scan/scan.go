@@ -3,6 +3,7 @@ package scan
 
 import (
 	"sync"
+	"sync/atomic"
 
 	"github.com/sectui/spilltea/internal/message"
 	"github.com/sectui/spilltea/internal/project"
@@ -19,14 +20,18 @@ type job struct {
 	resp *message.Response
 }
 
-const queueSize = 256
+const (
+	queueSize  = 256
+	queueBytes = 64 << 20
+)
 
 type Scanner struct {
-	hs   []Handler
-	jobs chan job
-	stop chan struct{}
-	done chan struct{}
-	once sync.Once
+	hs    []Handler
+	jobs  chan job
+	bytes atomic.Int64
+	stop  chan struct{}
+	done  chan struct{}
+	once  sync.Once
 }
 
 func New(hs ...Handler) *Scanner {
@@ -37,12 +42,29 @@ func New(hs ...Handler) *Scanner {
 
 // Scan returns false when the queue is full.
 func (s *Scanner) Scan(e project.Entry, req *message.Request, resp *message.Response) bool {
+	n := size(req, resp)
+	if s.bytes.Add(n) > queueBytes {
+		s.bytes.Add(-n)
+		return false
+	}
 	select {
 	case s.jobs <- job{e, req, resp}:
 		return true
 	default:
+		s.bytes.Add(-n)
 		return false
 	}
+}
+
+func size(req *message.Request, resp *message.Response) int64 {
+	var n int
+	if req != nil {
+		n += len(req.Body)
+	}
+	if resp != nil {
+		n += len(resp.Body)
+	}
+	return int64(n)
 }
 
 func (s *Scanner) Close() {
@@ -58,6 +80,7 @@ func (s *Scanner) run() {
 			for _, h := range s.hs {
 				h.Handle(j.e, j.req, j.resp)
 			}
+			s.bytes.Add(-size(j.req, j.resp))
 		case <-s.stop:
 			return
 		}

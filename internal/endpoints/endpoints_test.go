@@ -42,6 +42,13 @@ func TestExtract(t *testing.T) {
 	if Extract([]byte("const = ;")) != nil {
 		t.Fatal("invalid JS")
 	}
+	got = nil
+	for _, ep := range Extract([]byte("x(`${base}/api/me`); x(`/api/${a}${b}/c`); x('//cdn.test/v1/x'); x('//nodot/a')")) {
+		got = append(got, ep.Path)
+	}
+	if strings.Join(got, " ") != "//cdn.test/v1/x /api/me /api/{}/c" {
+		t.Fatalf("templates and protocol-relative: %q", got)
+	}
 }
 
 func TestHandler(t *testing.T) {
@@ -63,12 +70,17 @@ func TestHandler(t *testing.T) {
 	resp := &message.Response{Status: 200, Header: http.Header{"Content-Type": {"application/javascript"}}, Body: []byte(src)}
 	h.Handle(project.Entry{ID: 2, Method: "GET", URL: u.String()}, req, resp)
 	h.Handle(project.Entry{ID: 3, Method: "GET", URL: u.String()}, req, resp)
+	own, _ := url.Parse("https://app.test/static/own.js")
+	req = &message.Request{Method: "GET", URL: own, Header: http.Header{"Referer": {"ftp://x/y"}}}
+	h.Handle(project.Entry{ID: 4, Method: "GET", URL: own.String()}, req, &message.Response{Status: 200,
+		Header: http.Header{"Content-Type": {"application/javascript"}}, Body: []byte("x('/api/ftp/referer')")})
 	want := []string{
 		"POST https://app.test/api/login js",
 		"DELETE https://app.test/api/session js",
 		"GET https://app.test/api/users/%7B%7D/posts js",
 		"GET https://app.test/search?q=1&page={} js",
 		"PUT https://app.test/account/api/v2/profile js",
+		"GET https://app.test/api/ftp/referer js",
 	}
 	if strings.Join(added, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("added:\n%s", strings.Join(added, "\n"))

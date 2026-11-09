@@ -5,7 +5,7 @@
 //	row.asset    boolean  image, stylesheet, script...
 //	row.edited   boolean  changed in the intercept
 //	row.source   text     proxy, or the tool it was imported from
-//	row.finding  text     detectors and titles of its findings
+//	row.finding  text     detectors and titles of its findings, but noise
 //	resp.mime    text     the response's media type: text/html
 package query
 
@@ -90,6 +90,9 @@ func New(p *project.Project, e project.Entry, m project.Meta) *Record {
 		Findings: func() []string {
 			var out []string
 			for _, f := range p.FindingsOf(e.ID) {
+				if f.Status == project.StatusNoise {
+					continue
+				}
 				if !slices.Contains(out, f.Detector) {
 					out = append(out, f.Detector)
 				}

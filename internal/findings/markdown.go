@@ -12,7 +12,7 @@ import (
 // Markdown has the finding's first request still stored.
 func Markdown(p *project.Project, f project.Finding) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## %s\n\n- Detector: %s\n", f.Title, f.Detector)
+	fmt.Fprintf(&b, "## %s\n\n- Detector: %s\n", clean(f.Title), f.Detector)
 	seen := fmt.Sprint(len(f.Entries))
 	if f.Full() {
 		seen += "+"
@@ -21,7 +21,7 @@ func Markdown(p *project.Project, f project.Finding) string {
 	if f.Note != "" {
 		fmt.Fprintf(&b, "- Note: %s\n", strings.ReplaceAll(f.Note, "\n", "\n  "))
 	}
-	b.WriteString("\n" + block("", f.Detail))
+	b.WriteString("\n" + block("", clean(f.Detail)))
 	for _, id := range f.Entries {
 		req, err := p.ReadRequest(id)
 		if err != nil {
@@ -35,6 +35,16 @@ func Markdown(p *project.Project, f project.Finding) string {
 		break
 	}
 	return b.String()
+}
+
+// clean drops the control characters a server may have put in a finding.
+func clean(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r < 0x20 && r != '\n' && r != '\t' || r == 0x7f {
+			return -1
+		}
+		return r
+	}, s)
 }
 
 func capped(s string) string {

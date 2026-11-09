@@ -157,6 +157,13 @@ func ParseRequest(raw []byte, scheme string) (*Request, error) {
 	r := &Request{Method: f[0], Proto: f[2], Header: h, Body: body}
 	if strings.HasPrefix(f[1], "http://") || strings.HasPrefix(f[1], "https://") {
 		r.URL, err = url.Parse(f[1])
+		if err == nil && r.URL.Host == "" {
+			err = fmt.Errorf("%q has no host", f[1])
+		}
+		if err == nil {
+			// RFC 9112: the target's host wins over the Host header
+			h.Set("Host", r.URL.Host)
+		}
 	} else {
 		// without a leading "/" the target would be glued to the host:
 		// "GET @evil.test/" would go to evil.test
@@ -167,7 +174,14 @@ func ParseRequest(raw []byte, scheme string) (*Request, error) {
 		if host == "" {
 			return nil, errors.New("no Host header")
 		}
-		r.URL, err = url.Parse(scheme + "://" + host + f[1])
+		if strings.ContainsAny(host, "/?#@\\ ") {
+			return nil, fmt.Errorf("%q is not a host", host)
+		}
+		if f[1] == "*" {
+			r.URL = &url.URL{Scheme: scheme, Host: host, Path: "*"}
+		} else {
+			r.URL, err = url.Parse(scheme + "://" + host + f[1])
+		}
 	}
 	if err != nil {
 		return nil, err

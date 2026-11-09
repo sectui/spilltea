@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -20,8 +21,9 @@ import (
 )
 
 type (
-	OpenMsg struct{}
-	NoteMsg struct{ Finding project.Finding }
+	OpenMsg    struct{}
+	NoteMsg    struct{ Finding project.Finding }
+	TriagedMsg struct{}
 )
 
 type Model struct {
@@ -108,7 +110,7 @@ func (m *Model) SetTriage(key string, t project.Triage) tea.Cmd {
 	if f, ok := m.Selected(); ok && f.Key == key {
 		m.list.Select(at + 1)
 	}
-	return nil
+	return send(TriagedMsg{})
 }
 
 func (m *Model) status(s project.Status) tea.Cmd {
@@ -122,6 +124,11 @@ func (m *Model) status(s project.Status) tea.Cmd {
 func send(v tea.Msg) tea.Cmd { return func() tea.Msg { return v } }
 
 func (m *Model) Commands() []commands.Command {
+	return append(m.list.Commands(), m.TriageCommands()...)
+}
+
+// TriageCommands leave out the list's moves.
+func (m *Model) TriageCommands() []commands.Command {
 	selected := func() bool { _, ok := m.Selected(); return ok }
 	is := func(s project.Status) func() bool {
 		return func() bool { f, ok := m.Selected(); return ok && f.Status == s }
@@ -133,26 +140,26 @@ func (m *Model) Commands() []commands.Command {
 	if m.triaged {
 		title = "Hide the triaged findings"
 	}
-	return append(m.list.Commands(),
-		commands.Command{ID: "findings.open", Title: "Go to the requests where it was seen", Help: "requests", When: selected,
+	return []commands.Command{
+		{ID: "findings.open", Title: "Go to the requests where it was seen", Help: "requests", When: selected,
 			Run: func() tea.Cmd { return send(OpenMsg{}) }},
-		commands.Command{ID: "findings.relevant", Title: "Triage the finding: relevant", Help: "relevant", When: isNot(project.StatusRelevant),
+		{ID: "findings.relevant", Title: "Triage the finding: relevant", Help: "relevant", When: isNot(project.StatusRelevant),
 			Run: func() tea.Cmd { return m.status(project.StatusRelevant) }},
-		commands.Command{ID: "findings.noise", Title: "Triage the finding: noise", Help: "noise", When: isNot(project.StatusNoise),
+		{ID: "findings.noise", Title: "Triage the finding: noise", Help: "noise", When: isNot(project.StatusNoise),
 			Run: func() tea.Cmd { return m.status(project.StatusNoise) }},
-		commands.Command{ID: "findings.untriage", Title: "Set the finding back to new", When: func() bool { return selected() && !is(project.StatusNew)() },
+		{ID: "findings.untriage", Title: "Set the finding back to new", When: func() bool { return selected() && !is(project.StatusNew)() },
 			Run: func() tea.Cmd { return m.status(project.StatusNew) }},
-		commands.Command{ID: "findings.note", Title: "Write a note on the finding", Help: "note", When: selected,
+		{ID: "findings.note", Title: "Write a note on the finding", Help: "note", When: selected,
 			Run: func() tea.Cmd {
 				f, _ := m.Selected()
 				return send(NoteMsg{f})
 			}},
-		commands.Command{ID: "findings.triaged", Title: title, Run: func() tea.Cmd {
+		{ID: "findings.triaged", Title: title, Run: func() tea.Cmd {
 			m.triaged = !m.triaged
 			m.set(m.all, true)
 			return nil
 		}},
-	)
+	}
 }
 
 func (m *Model) Title() string {
@@ -228,28 +235,26 @@ func (m *Model) View(w, h int, focused bool) string {
 	return draw.Fit(strings.Join(lines, "\n"), w, h)
 }
 
-func Detail(f project.Finding, gone func(id int) bool) []string {
+func Detail(f project.Finding) []string {
 	status := map[project.Status]string{project.StatusNew: "new", project.StatusRelevant: "relevant", project.StatusNoise: "noise"}[f.Status]
-	out := []string{
-		f.Title,
-		fmt.Sprintf("%s · %s · first seen %s, last %s", f.Detector, status, f.First.Local().Format("2006-01-02 15:04:05"), f.Last.Local().Format("15:04:05")),
+	first, last := f.First.Local(), f.Last.Local()
+	lastFmt := "15:04:05"
+	if first.Format(time.DateOnly) != last.Format(time.DateOnly) {
+		lastFmt = time.DateTime
 	}
-	var ids, deleted []string
-	for _, id := range f.Entries {
-		if gone(id) {
-			deleted = append(deleted, fmt.Sprintf("#%d", id))
-		} else {
-			ids = append(ids, fmt.Sprintf("#%d", id))
-		}
+	ids := make([]string, len(f.Entries))
+	for i, id := range f.Entries {
+		ids[i] = fmt.Sprintf("#%d", id)
 	}
 	seen := fmt.Sprintf("seen in %s: %s", plural(len(f.Entries), "request"), strings.Join(ids, " "))
 	if f.Full() {
 		seen = fmt.Sprintf("seen in %d+ requests, the first ones: %s", len(f.Entries), strings.Join(ids, " "))
 	}
-	if len(deleted) > 0 {
-		seen += " (deleted: " + strings.Join(deleted, " ") + ")"
+	out := []string{
+		f.Title,
+		fmt.Sprintf("%s · %s · first seen %s, last %s", f.Detector, status, first.Format(time.DateTime), last.Format(lastFmt)),
+		seen,
 	}
-	out = append(out, seen)
 	if f.Note != "" {
 		for _, l := range strings.Split(f.Note, "\n") {
 			out = append(out, "note: "+l)

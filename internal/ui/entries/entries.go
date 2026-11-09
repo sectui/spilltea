@@ -126,6 +126,22 @@ func (m *Model) SetWithin(within func(project.Entry) bool) tea.Cmd {
 	return m.refilter()
 }
 
+// Rewithin keeps the selection, unlike SetWithin.
+func (m *Model) Rewithin(within func(project.Entry) bool) tea.Cmd {
+	m.within = within
+	return m.refilter()
+}
+
+// RefreshCheap reapplies a filter that does not read the messages.
+func (m *Model) RefreshCheap() tea.Cmd {
+	if m.query == nil || m.query.NeedsRaw() {
+		return nil
+	}
+	return m.refilter()
+}
+
+func (m *Model) Filter() string { return m.filter.Value() }
+
 // Add: if the selection is on the last entry, it follows the new one.
 func (m *Model) Add(e project.Entry) {
 	follow := len(m.shown) == 0 || m.list.Selected() == len(m.shown)-1
@@ -638,7 +654,9 @@ func (m *Model) View(w, h int, focused bool) string {
 			u += theme.Warning().Render(" edited")
 		}
 		for _, f := range m.p.FindingsOf(e.ID) {
-			u += theme.Danger().Render(" " + draw.Clean(f.Title))
+			if f.Status != project.StatusNoise {
+				u += theme.Danger().Render(" " + draw.Clean(f.Title))
+			}
 		}
 		row = ansi.Truncate(row+" "+u, w, "…")
 		if i == m.list.Selected() {

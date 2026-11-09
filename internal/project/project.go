@@ -66,6 +66,7 @@ type Project struct {
 	next   int
 	loaded bool // next is up to date
 	meta   map[int]Meta
+	closed bool
 
 	fmu      sync.Mutex
 	findings findings
@@ -158,22 +159,18 @@ func (p *Project) load() ([]Entry, map[int]Meta, error) {
 func (p *Project) Add(e Entry, req, resp []byte) (Entry, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	if p.closed {
+		return e, errors.New("project closed")
+	}
 	if !p.loaded {
 		if _, _, err := p.load(); err != nil {
 			return e, err
 		}
 	}
 	if p.index == nil {
-		f, err := os.OpenFile(p.dir("index.jsonl"), os.O_CREATE|os.O_RDWR|os.O_APPEND, 0o600)
+		f, err := openLines(p.dir("index.jsonl"))
 		if err != nil {
 			return e, err
-		}
-		// a truncated line must not swallow the next one
-		if fi, err := f.Stat(); err == nil && fi.Size() > 0 {
-			last := make([]byte, 1)
-			if _, err := f.ReadAt(last, fi.Size()-1); err == nil && last[0] != '\n' {
-				f.Write([]byte{'\n'})
-			}
 		}
 		p.index = f
 	}
@@ -249,6 +246,21 @@ func (p *Project) saveMeta() error {
 	return writeAtomic(p.dir("meta.json"), b)
 }
 
+func openLines(path string) (*os.File, error) {
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0o600)
+	if err != nil {
+		return nil, err
+	}
+	// a truncated line must not swallow the next one
+	if fi, err := f.Stat(); err == nil && fi.Size() > 0 {
+		last := make([]byte, 1)
+		if _, err := f.ReadAt(last, fi.Size()-1); err == nil && last[0] != '\n' {
+			f.Write([]byte{'\n'})
+		}
+	}
+	return f, nil
+}
+
 func writeAtomic(path string, b []byte) error {
 	tmp, err := os.CreateTemp(filepath.Dir(path), ".spilltea-*")
 	if err != nil {
@@ -302,7 +314,7 @@ func (p *Project) Forget(ids []int) error {
 		}
 		delete(p.meta, id)
 	}
-	errs = append(errs, p.saveMeta())
+	errs = append(errs, p.saveMeta(), p.forgetSightings(drop))
 	return errors.Join(errs...)
 }
 
@@ -325,6 +337,7 @@ func splitLines(b []byte) [][]byte {
 func (p *Project) Close() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	p.closed = true
 	var errs []error
 	if p.index != nil {
 		errs = append(errs, p.index.Close())

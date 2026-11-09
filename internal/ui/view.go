@@ -234,6 +234,8 @@ func (m *Model) paneView(p pane, r geom.Rect) string {
 		case !s.ok || !other.ok:
 			msg := fmt.Sprintf("%s: left side · %s: right side", m.keyOf("entries.diff-a"), m.keyOf("entries.diff-b"))
 			content = draw.Hatch(w, h, msg)
+		case m.diffing:
+			content = draw.Hatch(w, h, "Comparing…")
 		case p == paneDiffA:
 			content = m.diff.Left(w, h)
 			n := fmt.Sprintf("%d changes", m.diff.Changes())

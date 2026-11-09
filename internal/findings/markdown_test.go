@@ -31,4 +31,8 @@ func TestMarkdown(t *testing.T) {
 	if strings.Contains(got, "secret body") {
 		t.Error("the response body is copied")
 	}
+	f.Title, f.Detail = "\x1b[31mevil", "a\x1b]52;c;x\x07b"
+	if got := Markdown(p, f); strings.ContainsAny(got, "\x1b\x07") {
+		t.Errorf("control characters are copied: %q", got)
+	}
 }

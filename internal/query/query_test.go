@@ -38,6 +38,8 @@ func TestFinding(t *testing.T) {
 	e, _ := p.Add(project.Entry{Method: "GET", URL: "https://api.test/app.js"}, []byte("GET /app.js HTTP/1.1\r\n\r\n"), nil)
 	other, _ := p.Add(project.Entry{Method: "GET", URL: "https://api.test/"}, []byte("GET / HTTP/1.1\r\n\r\n"), nil)
 	p.AddSighting(project.Sighting{Key: "secrets:aws:1", Detector: "secrets", Title: "aws-access-token", Entry: e.ID})
+	p.AddSighting(project.Sighting{Key: "cookies:x", Detector: "cookies", Title: "sid: no HttpOnly", Entry: other.ID})
+	p.SetTriage("cookies:x", project.Triage{Status: project.StatusNoise})
 	for q, want := range map[string][2]bool{
 		`row.finding.ne:""`:               {true, false},
 		`row.finding.eq:"secrets"`:        {true, false},

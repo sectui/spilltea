@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 )
 
 type pattern struct {
@@ -55,6 +56,9 @@ func glob(s string, anchorEnd bool) *regexp.Regexp {
 
 func parse(s string) (pattern, error) {
 	s = strings.TrimSpace(s)
+	if !utf8.ValidString(s) {
+		return pattern{}, fmt.Errorf("%q is not valid UTF-8", s)
+	}
 	if i := strings.Index(s, "://"); i >= 0 {
 		s = s[i+3:]
 	}

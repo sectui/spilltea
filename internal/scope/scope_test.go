@@ -40,7 +40,7 @@ func TestEmpty(t *testing.T) {
 	if !s.URL(pu) || s.Host("ads.test", 443) {
 		t.Fatal("an empty include takes everything but the excluded")
 	}
-	for _, bad := range []string{"/path", "h:99999", "h:x"} {
+	for _, bad := range []string{"/path", "h:99999", "h:x", "a.test/\xa9*"} {
 		if _, err := New([]string{bad}, nil); err == nil {
 			t.Errorf("%q accepted", bad)
 		}

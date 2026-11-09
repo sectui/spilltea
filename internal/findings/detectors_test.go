@@ -161,4 +161,11 @@ func TestReflection(t *testing.T) {
 	if hits := (Reflection{}).Detect(j, resp); len(hits) != 0 {
 		t.Fatalf("not HTML: %+v", hits)
 	}
+	long := strings.Repeat("a", 3000)
+	u, _ = url.Parse("https://a.test/?" + long + "=hunter42")
+	resp.Header.Set("Content-Type", "text/html")
+	resp.Body = []byte("<p>hunter42</p>")
+	if hits := (Reflection{}).Detect(&message.Request{URL: u, Header: http.Header{}}, resp); len(hits) != 1 || len(hits[0].Title) > 80 || len(hits[0].Key) > 200 {
+		t.Fatalf("long name: %d, %d", len(hits[0].Title), len(hits[0].Key))
+	}
 }

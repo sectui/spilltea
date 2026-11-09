@@ -2,11 +2,14 @@ package findings
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"net/url"
 	"slices"
 	"strings"
 
+	"github.com/charmbracelet/x/ansi"
 	"golang.org/x/net/html"
 
 	"github.com/sectui/spilltea/internal/message"
@@ -38,10 +41,15 @@ func (Reflection) Detect(req *message.Request, resp *message.Response) []Hit {
 		}
 		seen[p.name] = true
 		i := bytes.Index(resp.Body, []byte(p.value))
+		key := p.name
+		if len(key) > 100 {
+			sum := sha256.Sum256([]byte(key))
+			key = key[:100] + hex.EncodeToString(sum[:4])
+		}
 		hits = append(hits, Hit{
-			Key:    where + ":" + p.name,
-			Title:  p.name + " reflected in " + strings.Join(ctx, ", "),
-			Detail: where + "\n" + p.name + "=" + short(p.value) + "\n\n" + around(resp.Body, []int{i, i + len(p.value)}),
+			Key:    where + ":" + key,
+			Title:  ansi.Truncate(p.name, 40, "…") + " reflected in " + strings.Join(ctx, ", "),
+			Detail: where + "\n" + short(p.name) + "=" + short(p.value) + "\n\n" + around(resp.Body, []int{i, i + len(p.value)}),
 		})
 	}
 	return hits

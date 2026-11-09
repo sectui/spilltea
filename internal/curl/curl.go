@@ -15,7 +15,11 @@ func Format(req *message.Request) string {
 	if req.Method != "GET" || len(req.Body) > 0 {
 		parts = append(parts, "-X "+quote(req.Method))
 	}
-	parts = append(parts, quote(req.URL.String()))
+	u := req.URL.String()
+	parts = append(parts, quote(u))
+	if strings.ContainsAny(u, "[]{}") {
+		parts = append(parts, "--globoff")
+	}
 	if strings.HasPrefix(req.Proto, "HTTP/2") {
 		parts = append(parts, "--http2")
 	}
@@ -41,7 +45,8 @@ func Format(req *message.Request) string {
 		parts = append(parts, "--compressed")
 	}
 	if len(req.Body) > 0 {
-		parts = append(parts, "--data-binary "+quote(string(req.Body)))
+		// --data-binary would read a file from a body starting with @
+		parts = append(parts, "--data-raw "+quote(string(req.Body)))
 	}
 	return strings.Join(parts, " \\\n  ")
 }
