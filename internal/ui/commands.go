@@ -52,6 +52,7 @@ func (m *Model) global() []commands.Command {
 		{ID: "page.history", Title: "Go to the history", Run: toPage(pageHistory)},
 		{ID: "page.sitemap", Title: "Go to the sitemap", Run: toPage(pageSitemap)},
 		{ID: "page.diff", Title: "Go to the diff", Run: toPage(pageDiff)},
+		{ID: "page.findings", Title: "Go to the findings", Run: toPage(pageFindings)},
 		{ID: "page.next", Title: "Go to the next page", Run: func() tea.Cmd { m.setPage((m.page + 1) % pageCount); return nil }},
 		{ID: "page.prev", Title: "Go to the previous page", Run: func() tea.Cmd { m.setPage((m.page + pageCount - 1) % pageCount); return nil }},
 		{ID: "pane.left", Title: "Go to the pane on the left", Run: nav(geom.Left)},
@@ -213,6 +214,12 @@ func (m *Model) scopes() []commands.Scope {
 		s = append(s, commands.Scope{Name: "Message", Commands: append(m.reader(p).Commands(), m.steepCommand())})
 	case paneDiffA, paneDiffB:
 		s = append(s, commands.Scope{Name: "Diff", Commands: m.diffCommands()})
+	case paneFindings:
+		s = append(s, commands.Scope{Name: "Findings", Commands: m.finds.Commands()})
+	case paneFinding:
+		s = append(s, commands.Scope{Name: "Finding", Commands: m.findView.Commands()})
+	case paneSeen:
+		s = append(s, commands.Scope{Name: "Seen in", Commands: m.seen.Commands()})
 	}
 	return s
 }
@@ -241,6 +248,8 @@ func (m *Model) allScopes() []commands.Scope {
 		{Name: "Sitemap", Commands: append(m.tree.Commands(), m.assetsCommand(), m.steepCommand())},
 		{Name: "Message", Commands: append(m.histReq.Commands(), m.steepCommand())},
 		{Name: "Diff", Commands: m.diffCommands()},
+		{Name: "Findings", Commands: m.finds.Commands()},
+		{Name: "Finding", Commands: m.findView.Commands()},
 		help.New(nil).Scope(),
 		palette.New(nil, "").Scope(),
 		confirm.New("", "", nil).Scope(),

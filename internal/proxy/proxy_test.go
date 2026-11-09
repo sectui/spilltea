@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"io"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -291,5 +292,25 @@ func TestHTTPS(t *testing.T) {
 	}
 	if e := next[EntryMsg](t, x).Entry; !strings.HasPrefix(e.URL, "https://") || e.Status != 200 {
 		t.Fatalf("entry %+v", e)
+	}
+}
+
+func TestUntrustedCA(t *testing.T) {
+	x, _, _, _, _ := setup(t, nil)
+	if _, ok := log.Writer().(stdLog); !ok {
+		t.Fatalf("the standard log goes to %T", log.Writer())
+	}
+	for range 3 {
+		log.Printf("http2: server: error reading preface from client 127.0.0.1:41000: remote error: tls: unknown certificate authority")
+	}
+	log.Printf("http2: server: error reading preface from client 127.0.0.1:41002: read: connection reset by peer")
+	e := next[ErrorMsg](t, x)
+	if !strings.Contains(e.Err.Error(), "spilltea ca") {
+		t.Fatalf("error %v", e.Err)
+	}
+	select {
+	case ev := <-x.Events():
+		t.Fatalf("then %T %v", ev, ev)
+	case <-time.After(200 * time.Millisecond):
 	}
 }

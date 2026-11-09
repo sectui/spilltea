@@ -32,6 +32,7 @@ type Config struct {
 	Intercept Intercept         `koanf:"intercept"`
 	Assets    Assets            `koanf:"assets"`
 	History   History           `koanf:"history"`
+	Findings  Findings          `koanf:"findings"`
 	Rules     []Rule            `koanf:"rules" validate:"dive"`
 	HTTP      HTTP              `koanf:"http"`
 	Steep     Steep             `koanf:"steep"`
@@ -41,7 +42,7 @@ type Config struct {
 type App struct {
 	Project       string   `koanf:"project"`
 	CreateProject bool     `koanf:"createProject"`
-	Page          string   `koanf:"page" validate:"oneof=intercept history sitemap diff"`
+	Page          string   `koanf:"page" validate:"oneof=intercept history sitemap diff findings"`
 	Filters       []Filter `koanf:"filters"`
 	Pipes         []Pipe   `koanf:"pipes"`
 }
@@ -103,6 +104,10 @@ func (a Assets) Type(mime string) bool {
 type History struct {
 	Responses   string `koanf:"responses" validate:"oneof=full headers status none"`
 	MaxBodySize int64  `koanf:"maxBodySize" validate:"gte=0"`
+}
+
+type Findings struct {
+	Secrets bool `koanf:"secrets"`
 }
 
 type Rule struct {

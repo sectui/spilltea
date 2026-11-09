@@ -4,9 +4,11 @@
 package proxy
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"slices"
@@ -23,6 +25,7 @@ import (
 	"github.com/sectui/httpql"
 
 	"github.com/sectui/spilltea/internal/config"
+	"github.com/sectui/spilltea/internal/findings"
 	"github.com/sectui/spilltea/internal/message"
 	"github.com/sectui/spilltea/internal/project"
 	"github.com/sectui/spilltea/internal/query"
@@ -65,9 +68,10 @@ type Decision struct {
 }
 
 type (
-	HeldMsg  struct{ Item *Item }
-	EntryMsg struct{ Entry project.Entry }
-	ErrorMsg struct{ Err error }
+	HeldMsg    struct{ Item *Item }
+	EntryMsg   struct{ Entry project.Entry }
+	FindingMsg struct{}
+	ErrorMsg   struct{ Err error }
 	// ReleasedMsg: the proxy decided on its own (intercept off, client gone).
 	ReleasedMsg struct{ Item *Item }
 )
@@ -93,11 +97,14 @@ type Proxy struct {
 	// Addr is the actual address after Start (useful with port 0).
 	Addr string
 
-	cfg     *config.Config
-	scope   *scope.Scope
-	rules   *rules.Rules
-	project *project.Project
-	filter  *httpql.Query[*query.Record]
+	cfg       *config.Config
+	scope     *scope.Scope
+	rules     *rules.Rules
+	project   *project.Project
+	filter    *httpql.Query[*query.Record]
+	scanner   *findings.Scanner
+	full      atomic.Bool
+	untrusted atomic.Bool
 
 	p       *mproxy.Proxy
 	events  chan any
@@ -132,6 +139,19 @@ func New(cfg *config.Config, p *project.Project) (*Proxy, error) {
 	}
 	x.holdReq.Store(cfg.Intercept.Requests)
 	x.holdResp.Store(cfg.Intercept.Responses)
+	ds, err := findings.Detectors(cfg.Findings)
+	if err != nil {
+		return nil, fmt.Errorf("findings: %w", err)
+	}
+	if len(ds) > 0 {
+		x.scanner = findings.New(p, ds, func(err error) {
+			if err != nil {
+				x.send(ErrorMsg{fmt.Errorf("findings: %w", err)})
+				return
+			}
+			x.send(FindingMsg{})
+		})
+	}
 	return x, nil
 }
 
@@ -139,12 +159,27 @@ func New(cfg *config.Config, p *project.Project) (*Proxy, error) {
 func Quiet() {
 	logrus.SetOutput(io.Discard)
 	logrus.SetLevel(logrus.PanicLevel)
+	// go-mitmproxy's http2 server logs there
+	log.SetOutput(io.Discard)
+}
+
+type stdLog struct{ x *Proxy }
+
+var untrustedAlerts = [][]byte{[]byte("tls: unknown certificate authority"), []byte("tls: bad certificate")}
+
+func (l stdLog) Write(b []byte) (int, error) {
+	untrusted := slices.ContainsFunc(untrustedAlerts, func(a []byte) bool { return bytes.Contains(b, a) })
+	if untrusted && !l.x.untrusted.Swap(true) {
+		go l.x.send(ErrorMsg{errors.New("a client does not trust spilltea's CA: import the output of `spilltea ca` as an authority")})
+	}
+	return len(b), nil
 }
 
 // Start listens, then serves in the background; later errors arrive as
 // ErrorMsg.
 func (x *Proxy) Start() error {
 	Quiet()
+	log.SetOutput(stdLog{x})
 	// go-mitmproxy only listens inside Start, which blocks: try the address
 	// first so an error (port in use) shows up right away.
 	ln, err := net.Listen("tcp", x.cfg.Proxy.Listen)
@@ -197,6 +232,9 @@ func (x *Proxy) send(ev any) {
 
 func (x *Proxy) Close() error {
 	x.closed.Do(func() { close(x.closing) })
+	if x.scanner != nil {
+		x.scanner.Close()
+	}
 	if x.p == nil {
 		return nil
 	}
@@ -502,4 +540,7 @@ func (x *Proxy) record(f *mproxy.Flow, fl *flow) {
 		return
 	}
 	x.send(EntryMsg{e})
+	if x.scanner != nil && !x.scanner.Scan(e.ID, req, resp) && !x.full.Swap(true) {
+		x.send(ErrorMsg{errors.New("findings: too much traffic, some responses were not scanned")})
+	}
 }

@@ -40,7 +40,7 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		if (m.inter.Busy() || keys.Printable(msg)) && m.inter.Key(msg) {
 			return nil
 		}
-	case paneHistory, paneSite:
+	case paneHistory, paneSite, paneSeen:
 		if l := m.list(); l.Capturing() {
 			if ok, cmd := l.Input(msg); ok {
 				return cmd
@@ -73,7 +73,7 @@ func (m *Model) paste(s string) tea.Cmd {
 	switch p := m.focus[m.page]; p {
 	case paneDetail:
 		m.inter.Paste(s)
-	case paneHistory, paneSite:
+	case paneHistory, paneSite, paneSeen:
 		return m.list().Paste(s)
 	case paneTree:
 		m.tree.Paste(s)
@@ -143,6 +143,12 @@ func (m *Model) mouse(msg tea.MouseMsg) tea.Cmd {
 			m.reader(p).Mouse(local)
 		case paneDiffA, paneDiffB:
 			m.diff.Mouse(local)
+		case paneFindings:
+			return m.finds.Mouse(local)
+		case paneFinding:
+			return m.findView.Mouse(local)
+		case paneSeen:
+			return m.seen.Mouse(local)
 		}
 		return nil
 	}

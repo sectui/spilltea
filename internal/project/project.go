@@ -4,6 +4,8 @@
 //	├── config.yaml     # optional, written by the user: scope, rules
 //	├── index.jsonl     # one line per entry, appended as they come
 //	├── meta.json       # marks and notes
+//	├── findings.jsonl
+//	├── findings.json
 //	├── requests/<id>   # raw request, as sent
 //	└── responses/<id>  # raw response, as much as history.responses keeps
 package project
@@ -64,6 +66,9 @@ type Project struct {
 	next   int
 	loaded bool // next is up to date
 	meta   map[int]Meta
+
+	fmu      sync.Mutex
+	findings findings
 }
 
 func Open(root string) (*Project, error) {
@@ -320,10 +325,16 @@ func splitLines(b []byte) [][]byte {
 func (p *Project) Close() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if p.index == nil {
-		return nil
+	var errs []error
+	if p.index != nil {
+		errs = append(errs, p.index.Close())
+		p.index = nil
 	}
-	err := p.index.Close()
-	p.index = nil
-	return err
+	p.fmu.Lock()
+	defer p.fmu.Unlock()
+	if p.findings.file != nil {
+		errs = append(errs, p.findings.file.Close())
+		p.findings.file = nil
+	}
+	return errors.Join(errs...)
 }

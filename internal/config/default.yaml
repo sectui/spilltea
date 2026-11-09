@@ -1,6 +1,6 @@
 project: "" # empty means ~/.local/share/spilltea/project
 createProject: true
-page: history # intercept, history, sitemap or diff
+page: history # intercept, history, sitemap, diff or findings
 filters: # ctrl+r, or preset:"name" in a query; your list replaces this one
   - name: errors
     query: resp.code.gte:500
@@ -10,6 +10,8 @@ filters: # ctrl+r, or preset:"name" in a query; your list replaces this one
     query: row.marked.eq:true
   - name: noted
     query: row.note.ne:""
+  - name: findings
+    query: row.finding.ne:""
 pipes: # your list replaces this one
   - name: Headers
     command: awk '/^\r?$/{exit} 1'
@@ -41,6 +43,9 @@ history:
   responses: full # full, headers, status or none
   maxBodySize: 2097152 # bytes; larger bodies are dropped, their headers kept
 
+findings: # assets included
+  secrets: true # gitleaks rules
+
 rules: [] # e.g. {on: request, part: head, match: "(?m)^Accept-Encoding:.*$", replace: "Accept-Encoding: identity"}; an empty match adds replace as a header
 
 http:
@@ -66,6 +71,7 @@ keys: # a key, a list, or [] for palette only; printable keys go to the intercep
     history: alt+2
     sitemap: alt+3
     diff: alt+4
+    findings: alt+5
     next: "]"
     prev: "["
   pane:
@@ -115,6 +121,13 @@ keys: # a key, a list, or [] for palette only; printable keys go to the intercep
     mode: t # requests or responses
     next: n
     prev: N
+  findings:
+    open: enter
+    relevant: r
+    noise: x
+    untriage: u
+    note: n
+    triaged: t
   copy:
     close: [esc, ctrl+c]
     pick: enter

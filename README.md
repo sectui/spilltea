@@ -71,6 +71,7 @@ import `spilltea-ca.pem` as a trusted authority for websites. The CA lives in
   Search a message, or pipe it through a shell command.
 - **Sitemap**: the history as a tree of hosts and paths.
 - **Diff**: two entries side by side, requests or responses.
+- **Findings**: what the detectors found in the traffic, to triage one by one.
 
 Press `?` to see the keys of the current pane, or `ctrl+p` for the command
 palette.
@@ -109,6 +110,19 @@ is stripped before the request leaves (`http.stripPwnFox`). Filter one container
 with `row.color.eq:"red"`. Requests sent to steep keep the header, so steep
 shows the color too.
 
+## Findings
+
+Detectors look at the traffic as it goes through, scripts and other assets
+included, even when their body is not stored:
+
+```yaml
+findings:
+    secrets: true # API keys, tokens...
+```
+
+In the history, `row.finding.eq:"secrets"` or `row.finding.cont:"aws"` filter
+the requests with findings, and `preset:"findings"` all of them.
+
 ## Steep
 
 `s` writes the request into a steep collection under `spilltea/<host>/<path>`
@@ -142,6 +156,8 @@ files:
 ├── config.yaml     # optional, written by you: scope, rules
 ├── index.jsonl     # one line per entry, appended as traffic comes in
 ├── meta.json       # marks and notes
+├── findings.jsonl  # one line per finding seen in a request
+├── findings.json   # their triage and notes
 ├── requests/<id>   # raw request, as sent
 └── responses/<id>  # raw response, as stored
 ```

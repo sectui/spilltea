@@ -1,5 +1,5 @@
-// Package ui is the root TUI model: the four pages (intercept, history,
-// sitemap, diff), their panes, key bindings and overlays.
+// Package ui is the root TUI model: the five pages (intercept, history,
+// sitemap, diff, findings), their panes, key bindings and overlays.
 package ui
 
 import (
@@ -17,7 +17,9 @@ import (
 	"github.com/sectui/foam/notify"
 	"github.com/sectui/foam/overlay"
 	"github.com/sectui/foam/prompt"
+	"github.com/sectui/foam/theme"
 	ftree "github.com/sectui/foam/tree"
+	"github.com/sectui/foam/viewer"
 
 	"github.com/sectui/spilltea/internal/config"
 	"github.com/sectui/spilltea/internal/message"
@@ -26,6 +28,7 @@ import (
 	"github.com/sectui/spilltea/internal/steep"
 	"github.com/sectui/spilltea/internal/ui/diff"
 	"github.com/sectui/spilltea/internal/ui/entries"
+	"github.com/sectui/spilltea/internal/ui/findings"
 	"github.com/sectui/spilltea/internal/ui/intercept"
 	"github.com/sectui/spilltea/internal/ui/picker"
 	"github.com/sectui/spilltea/internal/ui/reader"
@@ -39,10 +42,11 @@ const (
 	pageHistory
 	pageSitemap
 	pageDiff
+	pageFindings
 	pageCount
 )
 
-var pageNames = [pageCount]string{"Intercept", "History", "Sitemap", "Diff"}
+var pageNames = [pageCount]string{"Intercept", "History", "Sitemap", "Diff", "Findings"}
 
 type pane int
 
@@ -59,6 +63,9 @@ const (
 	paneSiteResponse
 	paneDiffA
 	paneDiffB
+	paneFindings
+	paneFinding
+	paneSeen
 	paneCount
 )
 
@@ -67,6 +74,7 @@ var pagePanes = [pageCount][]pane{
 	pageHistory:   {paneHistory, paneHistRequest, paneHistResponse},
 	pageSitemap:   {paneTree, paneSite, paneSiteRequest, paneSiteResponse},
 	pageDiff:      {paneDiffA, paneDiffB},
+	pageFindings:  {paneFindings, paneFinding, paneSeen},
 }
 
 type side struct {
@@ -104,6 +112,11 @@ type Model struct {
 	diffB      side
 	diffResp   bool // compare responses instead of requests
 	diffLoaded [2]int
+
+	finds     *findings.Model
+	findView  viewer.Model
+	seen      *entries.Model
+	findShown string
 
 	assets bool // shown in the history and the sitemap
 
@@ -147,15 +160,22 @@ func New(cfg *config.Config, proj *project.Project, px *proxy.Proxy) (*Model, er
 		siteRes:   reader.New(cfg.View.Wrap, cfg.View.PrettyPrint, cfg.App.Pipes),
 		siteDirty: true,
 		diff:      diff.New(),
+		finds:     findings.New(proj),
+		seen:      entries.New(proj, meta, cfg.App.Filters, history),
 	}
+	if err := m.finds.Reload(); err != nil {
+		return nil, fmt.Errorf("findings: %w", err)
+	}
+	m.findView.Wrap = true
 	if px != nil {
 		m.events = px.Events()
 	}
 	m.hist.Empty = "No requests yet · proxy on " + shortAddr(cfg.Proxy.Listen)
 	m.site.Empty = "Select a host or a path"
+	m.seen.Empty = "Select a finding"
 	m.notes.Max = 100
-	m.focus = [pageCount]pane{paneRequests, paneHistory, paneTree, paneDiffA}
-	for i, n := range []string{"intercept", "history", "sitemap", "diff"} {
+	m.focus = [pageCount]pane{paneRequests, paneHistory, paneTree, paneDiffA, paneFindings}
+	for i, n := range []string{"intercept", "history", "sitemap", "diff", "findings"} {
 		if cfg.App.Page == n {
 			m.page = page(i)
 		}
@@ -164,6 +184,9 @@ func New(cfg *config.Config, proj *project.Project, px *proxy.Proxy) (*Model, er
 	m.hist.SetWithin(nil)
 	m.site.SetEntries(append([]project.Entry(nil), es...))
 	m.site.SetWithin(func(project.Entry) bool { return false })
+	m.seen.SetEntries(append([]project.Entry(nil), es...))
+	m.seen.SetAssets(true)
+	m.seen.SetWithin(func(project.Entry) bool { return false })
 	if err := reg.Check(m.allScopes()); err != nil {
 		return nil, fmt.Errorf("invalid config:\n%w", err)
 	}
@@ -218,7 +241,7 @@ func (m *Model) update(msg tea.Msg) tea.Cmd {
 	if cmd, ok := m.notes.Update(msg); ok {
 		return cmd
 	}
-	if m.hist.Update(msg) || m.site.Update(msg) {
+	if m.hist.Update(msg) || m.site.Update(msg) || m.seen.Update(msg) {
 		return nil
 	}
 	for _, r := range m.readers() {
@@ -239,11 +262,11 @@ func (m *Model) update(msg tea.Msg) tea.Cmd {
 	case eventMsg:
 		return tea.Batch(m.event(msg.ev), m.waitEvent())
 	case entries.OpenMsg:
-		m.open()
+		return m.open()
 	case entries.NoteMsg:
 		return m.askNote(msg.Entry)
 	case entries.MetaMsg:
-		return tea.Batch(m.hist.Refresh(), m.site.Refresh())
+		return tea.Batch(m.hist.Refresh(), m.site.Refresh(), m.seen.Refresh())
 	case entries.DiffMsg:
 		return m.setDiff(msg.Entry, msg.B)
 	case entries.SteepMsg:
@@ -256,6 +279,10 @@ func (m *Model) update(msg tea.Msg) tea.Cmd {
 		m.hist.SetHistory(msg.History)
 		m.site.SetHistory(msg.History)
 		return saveHistory(msg.History)
+	case findings.OpenMsg:
+		m.setFocus(paneSeen)
+	case findings.NoteMsg:
+		return m.askFindingNote(msg.Finding)
 	case ftree.OpenMsg:
 		m.setFocus(paneSite)
 	case copiedMsg:
@@ -288,7 +315,17 @@ func (m *Model) event(ev any) tea.Cmd {
 	case proxy.EntryMsg:
 		m.hist.Add(ev.Entry)
 		m.site.Add(ev.Entry)
+		m.seen.Add(ev.Entry)
 		m.siteDirty = true
+	case proxy.FindingMsg:
+		before := m.finds.Untriaged()
+		if err := m.finds.Reload(); err != nil {
+			return notify.Err(err)
+		}
+		m.findShown = ""
+		if before == 0 && m.finds.Untriaged() > 0 && m.page != pageFindings {
+			return notify.Info("New finding · " + m.keyOf("page.findings"))
+		}
 	case proxy.ErrorMsg:
 		return notify.Err(ev.Err)
 	}
@@ -333,6 +370,8 @@ func (m *Model) afterUpdate() tea.Cmd {
 		cmds = append(cmds, m.syncReaders(m.site, &m.siteShown, m.siteReq, m.siteRes))
 	case pageDiff:
 		cmds = append(cmds, m.syncDiff())
+	case pageFindings:
+		cmds = append(cmds, m.syncFinding())
 	}
 	m.layout()
 	return tea.Batch(cmds...)
@@ -421,6 +460,9 @@ func (m *Model) noteLines(e project.Entry) []string {
 	if e.Source != "" {
 		out = append(out, "# "+imported(e))
 	}
+	for _, f := range m.proj.FindingsOf(e.ID) {
+		out = append(out, "# finding: "+f.Title+" ("+f.Detector+")")
+	}
 	return out
 }
 
@@ -451,20 +493,84 @@ func (m *Model) noResponse(l *entries.Model) string {
 	return "No response"
 }
 
-func (m *Model) open() {
+func (m *Model) open() tea.Cmd {
 	switch m.page {
 	case pageHistory:
 		m.setFocus(paneHistRequest)
 	case pageSitemap:
 		m.setFocus(paneSiteRequest)
+	case pageFindings:
+		if e, ok := m.seen.Selected(); ok {
+			return m.showInHistory(e)
+		}
 	}
+	return nil
+}
+
+func (m *Model) showInHistory(e project.Entry) tea.Cmd {
+	var cmds []tea.Cmd
+	if !m.hist.SelectID(e.ID) && e.Asset && !m.assets {
+		cmds = append(cmds, m.toggleAssets())
+	}
+	if !m.hist.SelectID(e.ID) {
+		cmds = append(cmds, m.hist.SetFilter(""))
+	}
+	m.hist.SelectID(e.ID)
+	m.setFocus(paneHistory)
+	return tea.Batch(cmds...)
 }
 
 func (m *Model) list() *entries.Model {
-	if m.page == pageSitemap {
+	switch m.page {
+	case pageSitemap:
 		return m.site
+	case pageFindings:
+		return m.seen
 	}
 	return m.hist
+}
+
+func (m *Model) syncFinding() tea.Cmd {
+	f, ok := m.finds.Selected()
+	shown := ""
+	if ok {
+		shown = fmt.Sprintf("%s %d %v", f.Key, len(f.Entries), f.Triage)
+	}
+	if shown == m.findShown {
+		return nil
+	}
+	if !ok || !strings.HasPrefix(m.findShown, f.Key+" ") {
+		m.findView.Top()
+	}
+	m.findShown = shown
+	if !ok {
+		m.findView.SetContent(nil, nil)
+		return m.seen.SetWithin(func(project.Entry) bool { return false })
+	}
+	exists := map[int]bool{}
+	for _, e := range m.hist.All() {
+		exists[e.ID] = true
+	}
+	plain := findings.Detail(f, func(id int) bool { return !exists[id] })
+	styled := slices.Clone(plain)
+	styled[0] = theme.Primary().Style().Bold(true).Render(plain[0])
+	for i := 1; i < len(styled) && plain[i] != ""; i++ {
+		styled[i] = theme.Subtle().Render(plain[i])
+	}
+	m.findView.SetContent(plain, styled)
+	in := map[int]bool{}
+	for _, id := range f.Entries {
+		in[id] = true
+	}
+	return m.seen.SetWithin(func(e project.Entry) bool { return in[e.ID] })
+}
+
+func (m *Model) askFindingNote(f project.Finding) tea.Cmd {
+	p := prompt.New("Note on "+f.Title, f.Note, func(note string) tea.Cmd {
+		return m.finds.SetTriage(f.Key, project.Triage{Status: f.Status, Note: strings.TrimSpace(note)})
+	})
+	p.Hint = "Leave empty to remove it"
+	return overlay.Open(p)
 }
 
 func (m *Model) askNote(e project.Entry) tea.Cmd {
@@ -593,6 +699,8 @@ func (m *Model) forget(ids []int) tea.Cmd {
 	err := m.proj.Forget(ids)
 	m.hist.Forget(ids)
 	m.site.Forget(ids)
+	m.seen.Forget(ids)
+	m.findShown = ""
 	m.siteDirty = true
 	m.histShown, m.siteShown = 0, 0
 	for _, s := range []*side{&m.diffA, &m.diffB} {

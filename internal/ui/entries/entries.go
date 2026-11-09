@@ -172,6 +172,16 @@ func (m *Model) Selected() (project.Entry, bool) {
 	return m.all[m.shown[m.list.Selected()]], true
 }
 
+func (m *Model) SelectID(id int) bool {
+	for i, k := range m.shown {
+		if m.all[k].ID == id {
+			m.list.Select(i)
+			return true
+		}
+	}
+	return false
+}
+
 func (m *Model) Shown() []project.Entry {
 	out := make([]project.Entry, len(m.shown))
 	for i, k := range m.shown {
@@ -626,6 +636,9 @@ func (m *Model) View(w, h int, focused bool) string {
 		}
 		if e.Edited {
 			u += theme.Warning().Render(" edited")
+		}
+		for _, f := range m.p.FindingsOf(e.ID) {
+			u += theme.Danger().Render(" " + draw.Clean(f.Title))
 		}
 		row = ansi.Truncate(row+" "+u, w, "…")
 		if i == m.list.Selected() {

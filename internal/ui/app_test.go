@@ -27,6 +27,9 @@ import (
 
 func init() { proxy.Quiet() }
 
+// split so that GitHub push protection does not take it for a real token
+const slackToken = "xox" + "b-1234567890123-1234567890123-abcdefghijABCDEFGHIJklmn"
+
 type env struct {
 	m      *Model
 	px     *proxy.Proxy
@@ -40,6 +43,11 @@ func newEnv(t *testing.T, edit func(*config.Config)) *env {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, ".js") {
+			w.Header().Set("Content-Type", "text/javascript")
+			io.WriteString(w, `const cfg={slack:"`+slackToken+`"};`)
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 		io.WriteString(w, `{"path": "`+r.URL.Path+`", "user": "`+r.URL.Query().Get("user")+`"}`)
 	}))
@@ -579,5 +587,60 @@ func TestSteepPick(t *testing.T) {
 	if _, err := os.Stat("requests"); err == nil {
 		os.RemoveAll("requests")
 		t.Fatal("a request went to an empty collection path")
+	}
+}
+
+func TestFindings(t *testing.T) {
+	e := newEnv(t, func(c *config.Config) { c.Findings.Secrets = true })
+	m := e.m
+	for _, p := range []string{"/app.js", "/vendor.js"} {
+		<-e.get(p)
+		e.next(t, reflect.TypeFor[proxy.EntryMsg]())
+		e.next(t, reflect.TypeFor[proxy.FindingMsg]())
+	}
+	if !strings.Contains(screen(m), "Findings  1 ") {
+		t.Fatalf("no badge:\n%s", screen(m))
+	}
+	key(m, '5', tea.ModAlt)
+	s := screen(m)
+	if os.Getenv("SHOW") != "" {
+		t.Log("\n" + s)
+	}
+	if !strings.Contains(s, "slack-bot-token") || !strings.Contains(s, "seen in 2 requests: #2 #3") || !strings.Contains(s, "Seen in (2)") {
+		t.Fatalf("findings page:\n%s", s)
+	}
+	typeKeys(m, "r")
+	if m.finds.Untriaged() != 0 || !strings.Contains(screen(m), "Everything is triaged") || strings.Contains(screen(m), "Findings  1 ") {
+		t.Fatalf("r triages it:\n%s", screen(m))
+	}
+	typeKeys(m, "t")
+	if f, ok := m.finds.Selected(); !ok || f.Status != project.StatusRelevant {
+		t.Fatalf("t shows the triaged: %+v", f)
+	}
+	typeKeys(m, "n")
+	typeKeys(m, "prod key")
+	key(m, tea.KeyEnter, 0)
+	if !strings.Contains(screen(m), "note: prod key") {
+		t.Fatalf("note:\n%s", screen(m))
+	}
+	typeKeys(m, "u")
+	if m.finds.Untriaged() != 1 {
+		t.Fatal("u sets it back to new")
+	}
+
+	key(m, tea.KeyEnter, 0)
+	if m.focus[pageFindings] != paneSeen {
+		t.Fatalf("focus %v", m.focus[pageFindings])
+	}
+	key(m, tea.KeyEnter, 0)
+	if sel, ok := m.hist.Selected(); m.page != pageHistory || !ok || sel.ID != 3 || !m.assets {
+		t.Fatalf("page %v, selected %+v", m.page, sel)
+	}
+	if !strings.Contains(screen(m), "vendor.js slack-bot-token") || !strings.Contains(screen(m), "# finding: slack-bot-token (secrets)") {
+		t.Fatalf("history:\n%s", screen(m))
+	}
+	drain(m, m.hist.SetFilter(`preset:"findings"`), 0)
+	if es := m.hist.Shown(); len(es) != 2 {
+		t.Fatalf("findings preset: %+v", es)
 	}
 }

@@ -77,6 +77,10 @@ func (m *Model) layout() {
 	case pageDiff:
 		cols := body.Columns(geom.Ratio(1), geom.Ratio(1))
 		m.rects[paneDiffA], m.rects[paneDiffB] = cols[0], cols[1]
+	case pageFindings:
+		rows := body.Rows(geom.Ratio(1), geom.Ratio(1))
+		cols := rows[0].Columns(geom.Ratio(1), geom.Ratio(1))
+		m.rects[paneFindings], m.rects[paneFinding], m.rects[paneSeen] = cols[0], cols[1], rows[1]
 	}
 	if m.zoomed {
 		f := m.focus[m.page]
@@ -155,6 +159,9 @@ var paneIcons = [paneCount]string{
 	paneSiteResponse: "\uf01c ",
 	paneDiffA:        "\uf0db ",
 	paneDiffB:        "\uf0db ",
+	paneFindings:     "\uf188 ",
+	paneFinding:      "\uf05a ",
+	paneSeen:         "\uf1da ",
 }
 
 func (m *Model) paneView(p pane, r geom.Rect) string {
@@ -238,6 +245,23 @@ func (m *Model) paneView(p pane, r geom.Rect) string {
 			content = m.diff.Right(w, h)
 		}
 		o.Scroll = m.diff.Scroll()
+	case paneFindings:
+		title = m.finds.Title()
+		content = m.finds.View(w, h, focused)
+		o.Scroll = m.finds.Scroll()
+	case paneFinding:
+		title = "Finding"
+		if _, ok := m.finds.Selected(); ok {
+			m.findView.SetSize(w, h)
+			content = m.findView.View()
+		} else {
+			content = draw.Hatch(w, h, "Nothing selected")
+		}
+		o.Scroll = m.findView.Scroll()
+	case paneSeen:
+		title = m.seen.Title("Seen in")
+		content = m.seen.View(w, h, focused)
+		o.Scroll = m.seen.Scroll()
 	}
 	o.Title = theme.Icon(paneIcons[p], "") + title
 	return draw.Frame(content, r.W, r.H, o)
@@ -279,11 +303,25 @@ func (m *Model) tabs() (string, []int) {
 		case p == pageIntercept && m.inter.Len() > 0:
 			st = theme.Warning().Style().Bold(true)
 		}
+		tab := st.Render(s)
+		if p == pageFindings {
+			if n := m.finds.Untriaged(); n > 0 {
+				tab += badge(n)
+			}
+		}
 		starts = append(starts, x)
-		b.WriteString(st.Render(s) + " ")
-		x += ansi.StringWidth(s) + 1
+		b.WriteString(tab + " ")
+		x += ansi.StringWidth(tab) + 1
 	}
 	return b.String(), append(starts, x)
+}
+
+func badge(n int) string {
+	s := fmt.Sprint(n)
+	if n > 9 {
+		s = "9+"
+	}
+	return lipgloss.NewStyle().Foreground(theme.Bg().Value()).Background(theme.Warning().Value()).Bold(true).Render(" " + s + " ")
 }
 
 func (m *Model) tabAt(x int) (page, bool) {
