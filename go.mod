@@ -15,6 +15,7 @@ require (
 	github.com/sergi/go-diff v1.4.0
 	github.com/sirupsen/logrus v1.10.2
 	github.com/spf13/pflag v1.0.10
+	github.com/tdewolff/parse/v2 v2.8.20
 	github.com/zricethezav/gitleaks/v8 v8.30.0
 	golang.org/x/net v0.61.0
 )

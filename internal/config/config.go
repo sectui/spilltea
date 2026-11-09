@@ -104,6 +104,7 @@ func (a Assets) Type(mime string) bool {
 type History struct {
 	Responses   string `koanf:"responses" validate:"oneof=full headers status none"`
 	MaxBodySize int64  `koanf:"maxBodySize" validate:"gte=0"`
+	JSEndpoints bool   `koanf:"jsEndpoints"`
 }
 
 type Findings struct {

@@ -25,11 +25,13 @@ import (
 	"github.com/sectui/httpql"
 
 	"github.com/sectui/spilltea/internal/config"
+	"github.com/sectui/spilltea/internal/endpoints"
 	"github.com/sectui/spilltea/internal/findings"
 	"github.com/sectui/spilltea/internal/message"
 	"github.com/sectui/spilltea/internal/project"
 	"github.com/sectui/spilltea/internal/query"
 	"github.com/sectui/spilltea/internal/rules"
+	"github.com/sectui/spilltea/internal/scan"
 	"github.com/sectui/spilltea/internal/scope"
 )
 
@@ -102,7 +104,7 @@ type Proxy struct {
 	rules     *rules.Rules
 	project   *project.Project
 	filter    *httpql.Query[*query.Record]
-	scanner   *findings.Scanner
+	scanner   *scan.Scanner
 	full      atomic.Bool
 	untrusted atomic.Bool
 
@@ -139,18 +141,30 @@ func New(cfg *config.Config, p *project.Project) (*Proxy, error) {
 	}
 	x.holdReq.Store(cfg.Intercept.Requests)
 	x.holdResp.Store(cfg.Intercept.Responses)
+	var hs []scan.Handler
 	ds, err := findings.Detectors(cfg.Findings)
 	if err != nil {
 		return nil, fmt.Errorf("findings: %w", err)
 	}
 	if len(ds) > 0 {
-		x.scanner = findings.New(p, ds, func(err error) {
+		hs = append(hs, findings.NewHandler(p, ds, func(err error) {
 			if err != nil {
 				x.send(ErrorMsg{fmt.Errorf("findings: %w", err)})
 				return
 			}
 			x.send(FindingMsg{})
-		})
+		}))
+	}
+	if cfg.History.JSEndpoints {
+		h, err := endpoints.NewHandler(cfg, p, func(e project.Entry) { x.send(EntryMsg{e}) },
+			func(err error) { x.send(ErrorMsg{fmt.Errorf("endpoints: %w", err)}) })
+		if err != nil {
+			return nil, err
+		}
+		hs = append(hs, h)
+	}
+	if len(hs) > 0 {
+		x.scanner = scan.New(hs...)
 	}
 	return x, nil
 }
@@ -540,7 +554,7 @@ func (x *Proxy) record(f *mproxy.Flow, fl *flow) {
 		return
 	}
 	x.send(EntryMsg{e})
-	if x.scanner != nil && !x.scanner.Scan(e.ID, req, resp) && !x.full.Swap(true) {
-		x.send(ErrorMsg{errors.New("findings: too much traffic, some responses were not scanned")})
+	if x.scanner != nil && !x.scanner.Scan(e, req, resp) && !x.full.Swap(true) {
+		x.send(ErrorMsg{errors.New("too much traffic, some responses were not scanned")})
 	}
 }

@@ -42,6 +42,7 @@ assets: # never intercepted, only their status is stored, hidden in the history
 history:
   responses: full # full, headers, status or none
   maxBodySize: 2097152 # bytes; larger bodies are dropped, their headers kept
+  jsEndpoints: false # add the paths found in scripts, nothing is sent; row.source.eq:"js"
 
 findings: # assets included
   secrets: true # gitleaks rules

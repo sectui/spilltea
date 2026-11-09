@@ -262,6 +262,8 @@ type Options struct {
 	Source string
 	// All also imports out-of-scope URLs.
 	All bool
+	// Added is called after each entry is stored.
+	Added func(project.Entry)
 }
 
 type Stats struct {
@@ -294,10 +296,15 @@ func New(cfg *config.Config, proj *project.Project, opt Options) (*Importer, err
 	}
 	im := &Importer{cfg: cfg, proj: proj, scope: sc, opt: opt, seen: map[string]bool{}}
 	for _, e := range es {
-		k := e.Method + " " + e.URL
-		im.seen[k] = im.seen[k] || e.Kept == project.KeptFull || e.Kept == project.KeptHeaders
+		im.Seen(e)
 	}
 	return im, nil
+}
+
+// Seen tells about an entry stored by someone else.
+func (im *Importer) Seen(e project.Entry) {
+	k := e.Method + " " + e.URL
+	im.seen[k] = im.seen[k] || e.Kept == project.KeptFull || e.Kept == project.KeptHeaders
 }
 
 // Read counts unreadable lines instead of failing.
@@ -336,11 +343,15 @@ func (im *Importer) Add(it Item) error {
 		im.Stats.Duplicates++
 		return nil
 	}
-	if _, err := im.proj.Add(e, req, resp); err != nil {
+	e, err := im.proj.Add(e, req, resp)
+	if err != nil {
 		return err
 	}
 	im.seen[k] = rich
 	im.Stats.Added++
+	if im.opt.Added != nil {
+		im.opt.Added(e)
+	}
 	return nil
 }
 

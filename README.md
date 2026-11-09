@@ -148,6 +148,9 @@ Each line is either a URL (`url [200]` works too) or a JSON line from httpx
 
 Filter by tool with `row.source.eq:"katana"` (`--source` sets the name).
 
+With `history.jsEndpoints: true`, the paths found in the scripts going through
+the proxy are added the same way, as `row.source.eq:"js"`.
+
 ## The project
 
 The history lives in a project folder (`project` setting, `--project` or

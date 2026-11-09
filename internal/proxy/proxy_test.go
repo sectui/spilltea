@@ -207,6 +207,7 @@ func TestInterceptResponse(t *testing.T) {
 	if r := <-get(c, base+"/free"); !strings.Contains(r, "hello /free") {
 		t.Fatalf("not held: %q", r)
 	}
+	next[EntryMsg](t, x)
 }
 
 func TestOutOfScope(t *testing.T) {
