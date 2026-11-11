@@ -12,6 +12,8 @@ filters: # ctrl+r, or preset:"name" in a query; your list replaces this one
     query: row.note.ne:""
   - name: findings
     query: row.finding.ne:""
+  - name: websockets
+    query: resp.mime.eq:websocket
 pipes: # your list replaces this one
   - name: Headers
     command: awk '/^\r?$/{exit} 1'

@@ -5,6 +5,7 @@ package proxy
 
 import (
 	"bytes"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -18,6 +19,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/gorilla/websocket"
 	"github.com/lqqyt2423/go-mitmproxy/cert"
 	mproxy "github.com/lqqyt2423/go-mitmproxy/proxy"
 	"github.com/sirupsen/logrus"
@@ -356,8 +358,9 @@ func (x *Proxy) Requestheaders(f *mproxy.Flow) {
 	if x.cfg.HTTP.StripPwnFox {
 		f.Request.Header.Del(message.PwnFoxHeader)
 	}
-	// CONNECT is only the HTTPS tunnel, not a real request
-	if f.Request.Method == http.MethodConnect || !x.scope.URL(f.Request.URL) {
+	// CONNECT is only the HTTPS tunnel, not a real request; a WebSocket
+	// upgrade is recorded whole by WebSocketEnd instead.
+	if f.Request.Method == http.MethodConnect || isWSUpgrade(f.Request.Header) || !x.scope.URL(f.Request.URL) {
 		return
 	}
 	fl := &flow{start: f.StartTime, color: strings.ToLower(strings.TrimSpace(color))}
@@ -498,6 +501,107 @@ func (x *Proxy) Response(f *mproxy.Flow) {
 func (x *Proxy) RequestError(f *mproxy.Flow, err error) {
 	if fl := x.flowOf(f); fl != nil {
 		fl.err = err.Error()
+	}
+}
+
+func isWSUpgrade(h http.Header) bool {
+	return strings.Contains(strings.ToLower(h.Get("Connection")), "upgrade") && strings.EqualFold(h.Get("Upgrade"), "websocket")
+}
+
+var wsFrameNames = map[int]string{
+	websocket.TextMessage:   "text",
+	websocket.BinaryMessage: "binary",
+	websocket.CloseMessage:  "close",
+	websocket.PingMessage:   "ping",
+	websocket.PongMessage:   "pong",
+}
+
+func wsFrameName(t int) string {
+	if n, ok := wsFrameNames[t]; ok {
+		return n
+	}
+	return fmt.Sprintf("opcode %d", t)
+}
+
+// wsTranscript renders a WebSocket session as readable text: a metadata
+// line per frame, then its content (hex for binary, so a NUL byte never
+// makes the whole thing look binary to the findings detectors).
+func wsTranscript(msgs []*mproxy.WebSocketMessage) []byte {
+	var b bytes.Buffer
+	for _, m := range msgs {
+		arrow := "<--"
+		if m.FromClient {
+			arrow = "-->"
+		}
+		fmt.Fprintf(&b, "%s %s %s %dB\n", arrow, m.Timestamp.Local().Format("15:04:05.000"), wsFrameName(m.Type), len(m.Content))
+		if m.Type == websocket.BinaryMessage {
+			b.WriteString(hex.EncodeToString(m.Content))
+		} else {
+			b.Write(m.Content)
+		}
+		b.WriteString("\n")
+	}
+	return b.Bytes()
+}
+
+// WebSocketEnd records a finished WebSocket connection as a single entry:
+// the handshake request, and the session as a transcript in place of a
+// response body. go-mitmproxy forwards frames live and has no hold hook for
+// them, so unlike requests and responses, a WS connection can only be
+// recorded once it closes, not intercepted frame by frame.
+func (x *Proxy) WebSocketEnd(f *mproxy.Flow) {
+	if f.Request == nil || f.WebSocket == nil || len(f.WebSocket.Messages) == 0 {
+		return
+	}
+	host := f.Request.URL.Host
+	if host == "" {
+		host = f.Request.Header.Get("Host")
+	}
+	if host == "" {
+		return
+	}
+	scheme := "ws"
+	if f.ConnContext != nil && f.ConnContext.ClientConn.Tls {
+		scheme = "wss"
+	}
+	u := *f.Request.URL
+	u.Scheme, u.Host = scheme, host
+	if !x.scope.URL(&u) {
+		return
+	}
+	color := strings.ToLower(strings.TrimSpace(f.Request.Header.Get(message.PwnFoxHeader)))
+	req := &message.Request{Method: http.MethodGet, URL: &u, Proto: f.Request.Proto, Header: f.Request.Header.Clone()}
+	resp := &message.Response{Proto: "HTTP/1.1", Status: http.StatusSwitchingProtocols,
+		Header: http.Header{"Upgrade": {"websocket"}, "Connection": {"Upgrade"}},
+		Body:   wsTranscript(f.WebSocket.Messages)}
+	x.recordWS(f.StartTime, color, req, resp)
+}
+
+func (x *Proxy) recordWS(start time.Time, color string, req *message.Request, resp *message.Response) {
+	e := project.Entry{Time: start, Method: req.Method, URL: req.URL.String(), Color: color, Mime: "websocket",
+		Status: resp.Status, Len: int64(len(resp.Body)), MS: time.Since(start).Milliseconds()}
+	kept := project.Kept(x.cfg.History.Responses)
+	if kept == project.KeptFull && int64(len(resp.Body)) > x.cfg.History.MaxBodySize {
+		kept = project.KeptHeaders
+	}
+	var raw []byte
+	switch kept {
+	case project.KeptNone:
+		e.Status, e.Len, e.Mime, e.MS = 0, 0, "", 0
+	case project.KeptHeaders:
+		raw = resp.Head()
+	case project.KeptFull:
+		raw = resp.Bytes()
+	}
+	e.Kept = kept
+	e, err := x.project.Add(e, req.Bytes(), raw)
+	if err != nil {
+		x.send(ErrorMsg{fmt.Errorf("history: %w", err)})
+		return
+	}
+	x.send(EntryMsg{e})
+	if x.scanner != nil && !x.scanner.Scan(e, req, resp) && !x.full.Swap(true) {
+		x.send(ErrorMsg{errors.New("too much traffic, some responses were not scanned")})
 	}
 }
 

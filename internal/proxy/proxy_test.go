@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gorilla/websocket"
 	"github.com/sectui/foam"
 	fconfig "github.com/sectui/foam/config"
 
@@ -293,6 +294,68 @@ func TestHTTPS(t *testing.T) {
 	}
 	if e := next[EntryMsg](t, x).Entry; !strings.HasPrefix(e.URL, "https://") || e.Status != 200 {
 		t.Fatalf("entry %+v", e)
+	}
+}
+
+func TestWebSocket(t *testing.T) {
+	upgrader := websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }}
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		c, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		defer c.Close()
+		mt, msg, err := c.ReadMessage()
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		c.WriteMessage(mt, msg)
+	}))
+	defer srv.Close()
+	cfg, _ := fconfig.LoadBytes[config.Config](foam.Defaults, config.Defaults)
+	cfg.Proxy.Listen, cfg.Proxy.CA, cfg.Proxy.Insecure = "127.0.0.1:0", t.TempDir(), true
+	p, _ := project.Open(t.TempDir())
+	x, _ := New(cfg, p)
+	if err := x.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer x.Close()
+	pool := x509.NewCertPool()
+	ca := x.p.GetCertificate()
+	pool.AddCert(&ca)
+	pu, _ := url.Parse("http://" + x.Addr)
+	d := &websocket.Dialer{Proxy: http.ProxyURL(pu), TLSClientConfig: &tls.Config{RootCAs: pool}}
+	wsURL := strings.Replace(strings.Replace(srv.URL, "127.0.0.1", "localhost", 1), "https://", "wss://", 1)
+	var conn *websocket.Conn
+	var err error
+	for range 50 {
+		if conn, _, err = d.Dial(wsURL+"/chat", nil); err == nil {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := conn.WriteMessage(websocket.TextMessage, []byte("ping")); err != nil {
+		t.Fatal(err)
+	}
+	if _, msg, err := conn.ReadMessage(); err != nil || string(msg) != "ping" {
+		t.Fatalf("echo: %q, %v", msg, err)
+	}
+	conn.Close()
+	e := next[EntryMsg](t, x).Entry
+	if e.Status != http.StatusSwitchingProtocols || e.Mime != "websocket" || !strings.HasPrefix(e.URL, "wss://") || e.Kept != project.KeptFull {
+		t.Fatalf("entry %+v", e)
+	}
+	resp, _ := p.ReadResponse(e.ID)
+	if n := strings.Count(string(resp), "ping"); n != 2 {
+		t.Fatalf("transcript:\n%s", resp)
+	}
+	if !strings.Contains(string(resp), "--> ") || !strings.Contains(string(resp), "<-- ") {
+		t.Fatalf("transcript missing direction markers:\n%s", resp)
 	}
 }
 
