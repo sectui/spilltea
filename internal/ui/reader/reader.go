@@ -71,6 +71,16 @@ type Model struct {
 	// stale: the output shown is the previous message's, the new one is
 	// on its way
 	stale bool
+
+	// renderGen: a stale result (renderGen moved on since) is dropped.
+	renderGen    int
+	cancelRender context.CancelFunc
+}
+
+type renderedMsg struct {
+	to        *Model
+	gen       int
+	lines, hi []string
 }
 
 func New(wrap, pretty bool, pipes []config.Pipe) *Model {
@@ -97,12 +107,17 @@ func (m *Model) Show(raw []byte, notes []string) tea.Cmd {
 		m.view.SetContent(nil, nil)
 		return m.runPipe()
 	}
-	m.render()
-	return nil
+	return m.runRender()
 }
 
 func (m *Model) Clear() {
 	m.raw, m.notes, m.has, m.piped, m.stale = nil, nil, false, nil, false
+	if m.cancelRender != nil {
+		m.cancelRender()
+		m.cancelRender = nil
+	}
+	// a render already in flight would otherwise resurrect this content
+	m.renderGen++
 	m.view.SetContent(nil, nil)
 }
 
@@ -147,8 +162,17 @@ func (m *Model) render() {
 		m.search()
 		return
 	}
-	head, body, hasBody := Parts(m.raw, m.pretty)
-	lines := append(slices.Clone(m.notes), strings.Split(head, "\n")...)
+	lines, hi := computeContent(m.raw, m.notes, m.pretty)
+	m.view.SetContent(lines, hi)
+	m.search()
+}
+
+// computeContent does the slow part of render: pretty-printing and
+// highlighting. It touches no Model field, so it is safe to run in the
+// background.
+func computeContent(raw []byte, notes []string, pretty bool) (lines, hi []string) {
+	head, body, hasBody := Parts(raw, pretty)
+	lines = append(slices.Clone(notes), strings.Split(head, "\n")...)
 	if hasBody {
 		lines = append(lines, "")
 		lines = append(lines, strings.Split(body, "\n")...)
@@ -156,8 +180,33 @@ func (m *Model) render() {
 	for i, l := range lines {
 		lines[i] = viewer.Sanitize(l)
 	}
-	m.view.SetContent(lines, highlight.Message(lines, highlight.Options{}))
-	m.search()
+	return lines, highlight.Message(lines, highlight.Options{})
+}
+
+// renderDebounce: holding j/up/down fires Show on every keypress; only the
+// last one in a burst is ever shown, so there is no point starting the
+// (CPU-heavy, uncancellable once running) highlighting for the others.
+const renderDebounce = 40 * time.Millisecond
+
+func (m *Model) runRender() tea.Cmd {
+	if m.cancelRender != nil {
+		m.cancelRender()
+	}
+	m.renderGen++
+	gen, raw, notes, pretty := m.renderGen, m.raw, m.notes, m.pretty
+	ctx, cancel := context.WithCancel(context.Background())
+	m.cancelRender = cancel
+	return func() tea.Msg {
+		t := time.NewTimer(renderDebounce)
+		defer t.Stop()
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-t.C:
+		}
+		lines, hi := computeContent(raw, notes, pretty)
+		return renderedMsg{m, gen, lines, hi}
+	}
 }
 
 func contentType(head []byte) string {
@@ -217,16 +266,29 @@ func (l *limited) Write(p []byte) (int, error) {
 }
 
 func (m *Model) Update(msg tea.Msg) bool {
-	if p, ok := msg.(pipedMsg); ok && p.to == m {
-		if p.gen == m.gen {
-			m.piped, m.pipeErr, m.stale = p.out, "", false
-			if p.err != nil {
-				m.pipeErr = p.err.Error()
+	switch msg := msg.(type) {
+	case pipedMsg:
+		if msg.to != m {
+			return false
+		}
+		if msg.gen == m.gen {
+			m.piped, m.pipeErr, m.stale = msg.out, "", false
+			if msg.err != nil {
+				m.pipeErr = msg.err.Error()
 			}
 			if m.piped == nil {
 				m.piped = []byte{}
 			}
 			m.render()
+		}
+		return true
+	case renderedMsg:
+		if msg.to != m {
+			return false
+		}
+		if msg.gen == m.renderGen {
+			m.view.SetContent(msg.lines, msg.hi)
+			m.search()
 		}
 		return true
 	}
