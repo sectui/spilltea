@@ -495,8 +495,8 @@ func (m *Model) header() int {
 	return n
 }
 
-// Mouse: a second click on the same row opens it.
-func (m *Model) Mouse(ev tea.MouseMsg) tea.Cmd {
+// Mouse: a click on the already-selected row opens it only if focused.
+func (m *Model) Mouse(ev tea.MouseMsg, focused bool) tea.Cmd {
 	mm := ev.Mouse()
 	if _, click := ev.(tea.MouseClickMsg); click && mm.Y < m.header()-1 {
 		m.filtering = true
@@ -505,8 +505,7 @@ func (m *Model) Mouse(ev tea.MouseMsg) tea.Cmd {
 	mm.Y -= m.header()
 	switch ev.(type) {
 	case tea.MouseClickMsg:
-		before := m.list.Selected()
-		if i := m.list.Mouse(tea.MouseClickMsg(mm)); i >= 0 && i == before {
+		if _, activate := m.list.Reselect(tea.MouseClickMsg(mm), focused); activate {
 			return send(OpenMsg{})
 		}
 	case tea.MouseWheelMsg:

@@ -134,9 +134,9 @@ func (m *Model) mouse(msg tea.MouseMsg) tea.Cmd {
 		case paneDetail:
 			m.inter.Mouse(local)
 		case paneHistory:
-			return m.hist.Mouse(local)
+			return m.hist.Mouse(local, wasFocused)
 		case paneSite:
-			return m.site.Mouse(local)
+			return m.site.Mouse(local, wasFocused)
 		case paneTree:
 			return m.tree.Mouse(local, wasFocused)
 		case paneHistRequest, paneHistResponse, paneSiteRequest, paneSiteResponse:
@@ -144,11 +144,11 @@ func (m *Model) mouse(msg tea.MouseMsg) tea.Cmd {
 		case paneDiffA, paneDiffB:
 			m.diff.Mouse(local)
 		case paneFindings:
-			return m.finds.Mouse(local)
+			return m.finds.Mouse(local, wasFocused)
 		case paneFinding:
 			return m.findView.Mouse(local)
 		case paneSeen:
-			return m.seen.Mouse(local)
+			return m.seen.Mouse(local, wasFocused)
 		}
 		return nil
 	}

@@ -171,12 +171,12 @@ func (m *Model) Title() string {
 
 func (m *Model) Scroll() draw.Scroll { return m.list.Scroll() }
 
-func (m *Model) Mouse(ev tea.MouseMsg) tea.Cmd {
+// Mouse: a click on the already-selected row opens it only if focused.
+func (m *Model) Mouse(ev tea.MouseMsg, focused bool) tea.Cmd {
 	mm := ev.Mouse()
 	switch ev.(type) {
 	case tea.MouseClickMsg:
-		before := m.list.Selected()
-		if i := m.list.Mouse(tea.MouseClickMsg(mm)); i >= 0 && i == before {
+		if _, activate := m.list.Reselect(tea.MouseClickMsg(mm), focused); activate {
 			return send(OpenMsg{})
 		}
 	case tea.MouseWheelMsg:

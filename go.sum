@@ -247,8 +247,8 @@ github.com/sagikazarmark/locafero v0.7.0 h1:5MqpDsTGNDhY8sGp0Aowyf0qKsPrhewaLSsF
 github.com/sagikazarmark/locafero v0.7.0/go.mod h1:2za3Cg5rMaTMoG/2Ulr9AwtFaIppKXTRYnozin4aB5k=
 github.com/sagikazarmark/slog-shim v0.1.0 h1:diDBnUNK9N/354PgrxMywXnAwEr1QZcOr6gto+ugjYE=
 github.com/sagikazarmark/slog-shim v0.1.0/go.mod h1:SrcSrq8aKtyuqEI1uvTDTK1arOWRIczQRv+GVI1AkeQ=
-github.com/sectui/foam v0.0.4 h1:8qyeSwymx38H1je2JSS+UM8+fOlwn5xZV4GrlPBzPPc=
-github.com/sectui/foam v0.0.4/go.mod h1:7o8jH4v+cq+wvdu+/eZz9Gdb161TejTXnYUjRCciAWk=
+github.com/sectui/foam v0.0.5 h1:348cuf1/00gG6TIv0D7ozC5VPEvz2AqSg4aoDkaydvo=
+github.com/sectui/foam v0.0.5/go.mod h1:7o8jH4v+cq+wvdu+/eZz9Gdb161TejTXnYUjRCciAWk=
 github.com/sectui/httpql v0.0.1 h1:LhhBEW/zOXqRR91E1hGGERbop5PdaSvWvzbVv3P1ziU=
 github.com/sectui/httpql v0.0.1/go.mod h1:fnS8V/4+Z3X4x4rOkKmMie0dS+5OdL1OaCkYvGTCMyQ=
 github.com/sergi/go-diff v1.4.0 h1:n/SP9D5ad1fORl+llWyN+D6qoUETXNZARKjyY2/KVCw=

@@ -11,7 +11,7 @@ require (
 	github.com/klauspost/compress v1.18.6
 	github.com/lqqyt2423/go-mitmproxy v1.9.4
 	github.com/rs/zerolog v1.33.0
-	github.com/sectui/foam v0.0.4
+	github.com/sectui/foam v0.0.5
 	github.com/sectui/httpql v0.0.1
 	github.com/sergi/go-diff v1.4.0
 	github.com/sirupsen/logrus v1.10.2
