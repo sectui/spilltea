@@ -5,8 +5,8 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/sectui/spilltea/internal/message"
-	"github.com/sectui/spilltea/internal/project"
+	"github.com/anotherhadi/spilltea/internal/message"
+	"github.com/anotherhadi/spilltea/internal/project"
 )
 
 // Handle is called from the scanner's goroutine. resp may be nil.

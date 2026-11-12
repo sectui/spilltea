@@ -14,9 +14,9 @@ import (
 	"slices"
 	"strconv"
 
-	"github.com/sectui/httpql"
+	"github.com/anotherhadi/httpql"
 
-	"github.com/sectui/spilltea/internal/project"
+	"github.com/anotherhadi/spilltea/internal/project"
 )
 
 type Record struct {

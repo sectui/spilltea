@@ -3,8 +3,8 @@ package findings
 import (
 	"errors"
 
-	"github.com/sectui/spilltea/internal/message"
-	"github.com/sectui/spilltea/internal/project"
+	"github.com/anotherhadi/spilltea/internal/message"
+	"github.com/anotherhadi/spilltea/internal/project"
 )
 
 // Rescan runs the detectors on the stored entries. Bodies that were not

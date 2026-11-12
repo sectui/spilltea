@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sectui/spilltea/internal/project"
+	"github.com/anotherhadi/spilltea/internal/project"
 )
 
 func TestMarkdown(t *testing.T) {

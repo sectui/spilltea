@@ -11,13 +11,13 @@ import (
 
 	flag "github.com/spf13/pflag"
 
-	fconfig "github.com/sectui/foam/config"
+	fconfig "github.com/anotherhadi/foam/config"
 
-	"github.com/sectui/spilltea/internal/config"
-	"github.com/sectui/spilltea/internal/importer"
-	"github.com/sectui/spilltea/internal/project"
-	"github.com/sectui/spilltea/internal/proxy"
-	"github.com/sectui/spilltea/internal/ui"
+	"github.com/anotherhadi/spilltea/internal/config"
+	"github.com/anotherhadi/spilltea/internal/importer"
+	"github.com/anotherhadi/spilltea/internal/project"
+	"github.com/anotherhadi/spilltea/internal/proxy"
+	"github.com/anotherhadi/spilltea/internal/ui"
 )
 
 func main() {

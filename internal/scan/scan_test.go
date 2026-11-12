@@ -3,8 +3,8 @@ package scan
 import (
 	"testing"
 
-	"github.com/sectui/spilltea/internal/message"
-	"github.com/sectui/spilltea/internal/project"
+	"github.com/anotherhadi/spilltea/internal/message"
+	"github.com/anotherhadi/spilltea/internal/project"
 )
 
 type blocker struct{ release chan struct{} }

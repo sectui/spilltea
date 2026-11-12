@@ -1,4 +1,4 @@
-module github.com/sectui/spilltea
+module github.com/anotherhadi/spilltea
 
 go 1.26.7
 
@@ -6,13 +6,13 @@ require (
 	charm.land/bubbletea/v2 v2.1.1
 	charm.land/lipgloss/v2 v2.0.6
 	github.com/andybalholm/brotli v1.2.1
+	github.com/anotherhadi/foam v0.0.6
+	github.com/anotherhadi/httpql v0.0.3
 	github.com/charmbracelet/x/ansi v0.11.9
 	github.com/gorilla/websocket v1.5.3
 	github.com/klauspost/compress v1.18.6
 	github.com/lqqyt2423/go-mitmproxy v1.9.4
 	github.com/rs/zerolog v1.33.0
-	github.com/sectui/foam v0.0.5
-	github.com/sectui/httpql v0.0.1
 	github.com/sergi/go-diff v1.4.0
 	github.com/sirupsen/logrus v1.10.2
 	github.com/spf13/pflag v1.0.10

@@ -12,7 +12,7 @@ import (
 	"github.com/zricethezav/gitleaks/v8/detect"
 	"github.com/zricethezav/gitleaks/v8/logging"
 
-	"github.com/sectui/spilltea/internal/message"
+	"github.com/anotherhadi/spilltea/internal/message"
 )
 
 const cacheSize = 4096

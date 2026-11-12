@@ -3,9 +3,9 @@ package ui
 import (
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/sectui/foam/keys"
+	"github.com/anotherhadi/foam/keys"
 
-	"github.com/sectui/spilltea/internal/ui/reader"
+	"github.com/anotherhadi/spilltea/internal/ui/reader"
 )
 
 func (m *Model) reader(p pane) *reader.Model {

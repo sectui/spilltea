@@ -15,10 +15,10 @@ import (
 	"github.com/tdewolff/parse/v2"
 	"github.com/tdewolff/parse/v2/js"
 
-	"github.com/sectui/spilltea/internal/config"
-	"github.com/sectui/spilltea/internal/importer"
-	"github.com/sectui/spilltea/internal/message"
-	"github.com/sectui/spilltea/internal/project"
+	"github.com/anotherhadi/spilltea/internal/config"
+	"github.com/anotherhadi/spilltea/internal/importer"
+	"github.com/anotherhadi/spilltea/internal/message"
+	"github.com/anotherhadi/spilltea/internal/project"
 )
 
 const cacheSize = 4096

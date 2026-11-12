@@ -5,9 +5,9 @@ import (
 	"cmp"
 	"time"
 
-	"github.com/sectui/spilltea/internal/config"
-	"github.com/sectui/spilltea/internal/message"
-	"github.com/sectui/spilltea/internal/project"
+	"github.com/anotherhadi/spilltea/internal/config"
+	"github.com/anotherhadi/spilltea/internal/message"
+	"github.com/anotherhadi/spilltea/internal/project"
 )
 
 type Hit struct {

@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/sectui/spilltea/internal/message"
+	"github.com/anotherhadi/spilltea/internal/message"
 )
 
 type pattern struct {

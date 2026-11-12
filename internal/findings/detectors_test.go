@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sectui/spilltea/internal/message"
+	"github.com/anotherhadi/spilltea/internal/message"
 )
 
 func request(t *testing.T, raw string, header ...string) *message.Request {

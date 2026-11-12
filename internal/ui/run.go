@@ -3,11 +3,11 @@ package ui
 import (
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/sectui/foam/theme"
+	"github.com/anotherhadi/foam/theme"
 
-	"github.com/sectui/spilltea/internal/config"
-	"github.com/sectui/spilltea/internal/project"
-	"github.com/sectui/spilltea/internal/proxy"
+	"github.com/anotherhadi/spilltea/internal/config"
+	"github.com/anotherhadi/spilltea/internal/project"
+	"github.com/anotherhadi/spilltea/internal/proxy"
 )
 
 func Run(cfg *config.Config) error {

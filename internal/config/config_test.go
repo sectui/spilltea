@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sectui/foam"
-	fconfig "github.com/sectui/foam/config"
+	"github.com/anotherhadi/foam"
+	fconfig "github.com/anotherhadi/foam/config"
 )
 
 func TestDefaults(t *testing.T) {

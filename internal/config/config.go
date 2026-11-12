@@ -14,10 +14,10 @@ import (
 
 	flag "github.com/spf13/pflag"
 
-	"github.com/sectui/foam"
-	"github.com/sectui/foam/commands"
-	fconfig "github.com/sectui/foam/config"
-	"github.com/sectui/foam/theme"
+	"github.com/anotherhadi/foam"
+	"github.com/anotherhadi/foam/commands"
+	fconfig "github.com/anotherhadi/foam/config"
+	"github.com/anotherhadi/foam/theme"
 )
 
 //go:embed default.yaml
@@ -236,7 +236,7 @@ func Load(args []string) (*Config, error) {
 		Usage: usage,
 		Base:  [][]byte{foam.Defaults, Defaults},
 		Files: []string{
-			filepath.Join(fconfig.Dir("sectui"), "config.yaml"),
+			filepath.Join(fconfig.Dir("foam"), "config.yaml"),
 			filepath.Join(fconfig.Dir("spilltea"), "config.yaml"),
 		},
 		Extra: func(get func(string) string) []string {

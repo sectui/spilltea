@@ -5,19 +5,19 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/sectui/foam/commands"
-	"github.com/sectui/foam/confirm"
-	"github.com/sectui/foam/geom"
-	"github.com/sectui/foam/help"
-	"github.com/sectui/foam/notify"
-	"github.com/sectui/foam/overlay"
-	"github.com/sectui/foam/palette"
-	"github.com/sectui/foam/prompt"
+	"github.com/anotherhadi/foam/commands"
+	"github.com/anotherhadi/foam/confirm"
+	"github.com/anotherhadi/foam/geom"
+	"github.com/anotherhadi/foam/help"
+	"github.com/anotherhadi/foam/notify"
+	"github.com/anotherhadi/foam/overlay"
+	"github.com/anotherhadi/foam/palette"
+	"github.com/anotherhadi/foam/prompt"
 
-	pfindings "github.com/sectui/spilltea/internal/findings"
-	"github.com/sectui/spilltea/internal/proxy"
-	"github.com/sectui/spilltea/internal/ui/intercept"
-	"github.com/sectui/spilltea/internal/ui/picker"
+	pfindings "github.com/anotherhadi/spilltea/internal/findings"
+	"github.com/anotherhadi/spilltea/internal/proxy"
+	"github.com/anotherhadi/spilltea/internal/ui/intercept"
+	"github.com/anotherhadi/spilltea/internal/ui/picker"
 )
 
 func (m *Model) global() []commands.Command {

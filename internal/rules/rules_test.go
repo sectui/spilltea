@@ -5,8 +5,8 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/sectui/spilltea/internal/config"
-	"github.com/sectui/spilltea/internal/message"
+	"github.com/anotherhadi/spilltea/internal/config"
+	"github.com/anotherhadi/spilltea/internal/message"
 )
 
 func TestRequest(t *testing.T) {

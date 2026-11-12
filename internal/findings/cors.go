@@ -3,7 +3,7 @@ package findings
 import (
 	"strings"
 
-	"github.com/sectui/spilltea/internal/message"
+	"github.com/anotherhadi/spilltea/internal/message"
 )
 
 type CORS struct{}

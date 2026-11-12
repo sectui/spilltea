@@ -12,7 +12,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"golang.org/x/net/html"
 
-	"github.com/sectui/spilltea/internal/message"
+	"github.com/anotherhadi/spilltea/internal/message"
 )
 
 type Reflection struct{}

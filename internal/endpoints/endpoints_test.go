@@ -7,12 +7,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sectui/foam"
-	fconfig "github.com/sectui/foam/config"
+	"github.com/anotherhadi/foam"
+	fconfig "github.com/anotherhadi/foam/config"
 
-	"github.com/sectui/spilltea/internal/config"
-	"github.com/sectui/spilltea/internal/message"
-	"github.com/sectui/spilltea/internal/project"
+	"github.com/anotherhadi/spilltea/internal/config"
+	"github.com/anotherhadi/spilltea/internal/message"
+	"github.com/anotherhadi/spilltea/internal/project"
 )
 
 const src = "const a='\\/api\\/v1\\/users', b=`/api/users/${id}/posts`;" +

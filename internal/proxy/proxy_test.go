@@ -13,12 +13,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/anotherhadi/foam"
+	fconfig "github.com/anotherhadi/foam/config"
 	"github.com/gorilla/websocket"
-	"github.com/sectui/foam"
-	fconfig "github.com/sectui/foam/config"
 
-	"github.com/sectui/spilltea/internal/config"
-	"github.com/sectui/spilltea/internal/project"
+	"github.com/anotherhadi/spilltea/internal/config"
+	"github.com/anotherhadi/spilltea/internal/project"
 )
 
 type seen struct {

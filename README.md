@@ -8,7 +8,7 @@
 An intercepting HTTP proxy for the terminal. Hold, edit and drop requests and
 responses, keep the history as plain files, search it with
 [HTTPQL](https://docs.caido.io/reference/httpql.html), and hand requests over to
-[steep](https://github.com/sectui/steep) to replay and fuzz them.
+[steep](https://github.com/anotherhadi/steep) to replay and fuzz them.
 
 If you know Burp Suite or Caido: spilltea covers the proxy, history and sitemap,
 steep covers the repeater and intruder. It is built for pentesters, bug bounty
@@ -19,24 +19,24 @@ hunters and CTF players.
 With go:
 
 ```sh
-go install github.com/sectui/spilltea/cmd/spilltea@latest
+go install github.com/anotherhadi/spilltea/cmd/spilltea@latest
 ```
 
-With Nix, from the [sectui NUR](https://github.com/sectui/nur):
+With Nix, from the [anotherhadi NUR](https://github.com/anotherhadi/nur):
 
 ```sh
-nix run github:sectui/nur#spilltea
+nix run github:anotherhadi/nur#spilltea
 ```
 
 ```nix
-# flake: inputs.nur-sectui.url = "github:sectui/nur";
-environment.systemPackages = [ nur-sectui.packages.${system}.spilltea ];
+# flake: inputs.nur-anotherhadi.url = "github:anotherhadi/nur";
+environment.systemPackages = [ nur-anotherhadi.packages.${system}.spilltea ];
 
 # or through NUR
-environment.systemPackages = [ pkgs.nur.repos.sectui.spilltea ];
+environment.systemPackages = [ pkgs.nur.repos.anotherhadi.spilltea ];
 ```
 
-Each [GitHub release](https://github.com/sectui/spilltea/releases) has an
+Each [GitHub release](https://github.com/anotherhadi/spilltea/releases) has an
 archive per platform (Linux, macOS and FreeBSD, amd64 and arm64) with the
 `spilltea` binary:
 
@@ -177,6 +177,6 @@ their headers are kept. Bodies are stored decompressed.
 
 `spilltea --print-config` prints every setting, and
 [`internal/config/default.yaml`](internal/config/default.yaml) lists the
-defaults. Spilltea reads, in order: `~/.config/sectui/config.yaml`,
+defaults. Spilltea reads, in order: `~/.config/foam/config.yaml`,
 `~/.config/spilltea/config.yaml`, the project's `config.yaml`, `SPILLTEA_*`
 environment variables, then command-line flags.

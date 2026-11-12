@@ -6,8 +6,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/sectui/spilltea/internal/config"
-	"github.com/sectui/spilltea/internal/message"
+	"github.com/anotherhadi/spilltea/internal/config"
+	"github.com/anotherhadi/spilltea/internal/message"
 )
 
 type rule struct {

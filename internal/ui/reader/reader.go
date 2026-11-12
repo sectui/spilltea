@@ -16,18 +16,18 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/sectui/foam/commands"
-	"github.com/sectui/foam/draw"
-	"github.com/sectui/foam/highlight"
-	"github.com/sectui/foam/input"
-	"github.com/sectui/foam/notify"
-	"github.com/sectui/foam/overlay"
-	"github.com/sectui/foam/theme"
-	"github.com/sectui/foam/viewer"
+	"github.com/anotherhadi/foam/commands"
+	"github.com/anotherhadi/foam/draw"
+	"github.com/anotherhadi/foam/highlight"
+	"github.com/anotherhadi/foam/input"
+	"github.com/anotherhadi/foam/notify"
+	"github.com/anotherhadi/foam/overlay"
+	"github.com/anotherhadi/foam/theme"
+	"github.com/anotherhadi/foam/viewer"
 
-	"github.com/sectui/spilltea/internal/config"
-	"github.com/sectui/spilltea/internal/format"
-	"github.com/sectui/spilltea/internal/ui/picker"
+	"github.com/anotherhadi/spilltea/internal/config"
+	"github.com/anotherhadi/spilltea/internal/format"
+	"github.com/anotherhadi/spilltea/internal/ui/picker"
 )
 
 const (

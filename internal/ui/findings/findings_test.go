@@ -5,7 +5,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/sectui/spilltea/internal/project"
+	"github.com/anotherhadi/spilltea/internal/project"
 )
 
 func TestMouseOpensOnlyWhenAlreadyFocused(t *testing.T) {

@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sectui/spilltea/internal/config"
-	"github.com/sectui/spilltea/internal/project"
+	"github.com/anotherhadi/spilltea/internal/config"
+	"github.com/anotherhadi/spilltea/internal/project"
 )
 
 func TestParse(t *testing.T) {

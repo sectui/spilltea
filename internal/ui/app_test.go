@@ -18,13 +18,13 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/sectui/foam"
-	fconfig "github.com/sectui/foam/config"
-	"github.com/sectui/foam/theme"
+	"github.com/anotherhadi/foam"
+	fconfig "github.com/anotherhadi/foam/config"
+	"github.com/anotherhadi/foam/theme"
 
-	"github.com/sectui/spilltea/internal/config"
-	"github.com/sectui/spilltea/internal/project"
-	"github.com/sectui/spilltea/internal/proxy"
+	"github.com/anotherhadi/spilltea/internal/config"
+	"github.com/anotherhadi/spilltea/internal/project"
+	"github.com/anotherhadi/spilltea/internal/proxy"
 )
 
 func init() { proxy.Quiet() }

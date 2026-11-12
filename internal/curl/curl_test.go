@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sectui/spilltea/internal/message"
+	"github.com/anotherhadi/spilltea/internal/message"
 )
 
 func TestFormat(t *testing.T) {

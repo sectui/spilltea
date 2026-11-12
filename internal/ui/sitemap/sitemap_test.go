@@ -3,7 +3,7 @@ package sitemap
 import (
 	"testing"
 
-	"github.com/sectui/spilltea/internal/project"
+	"github.com/anotherhadi/spilltea/internal/project"
 )
 
 func TestBuild(t *testing.T) {

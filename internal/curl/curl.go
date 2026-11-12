@@ -5,7 +5,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/sectui/spilltea/internal/message"
+	"github.com/anotherhadi/spilltea/internal/message"
 )
 
 // Format puts one option per line. Host is already in the URL, curl computes

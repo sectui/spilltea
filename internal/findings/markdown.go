@@ -5,8 +5,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/sectui/spilltea/internal/message"
-	"github.com/sectui/spilltea/internal/project"
+	"github.com/anotherhadi/spilltea/internal/message"
+	"github.com/anotherhadi/spilltea/internal/project"
 )
 
 // Markdown has the finding's first request still stored.

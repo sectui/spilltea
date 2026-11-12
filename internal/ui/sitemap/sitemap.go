@@ -7,11 +7,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/sectui/foam/draw"
-	"github.com/sectui/foam/theme"
-	"github.com/sectui/foam/tree"
+	"github.com/anotherhadi/foam/draw"
+	"github.com/anotherhadi/foam/theme"
+	"github.com/anotherhadi/foam/tree"
 
-	"github.com/sectui/spilltea/internal/project"
+	"github.com/anotherhadi/spilltea/internal/project"
 )
 
 // Node.Prefix is the real path, "api.test/v1/users"; Name is its place in

@@ -21,7 +21,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sectui/spilltea/internal/message"
+	"github.com/anotherhadi/spilltea/internal/message"
 )
 
 var nameUnsafe = regexp.MustCompile(`[^A-Za-z0-9._-]+`)

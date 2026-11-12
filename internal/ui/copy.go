@@ -7,15 +7,15 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/sectui/foam/confirm"
-	"github.com/sectui/foam/notify"
-	"github.com/sectui/foam/overlay"
+	"github.com/anotherhadi/foam/confirm"
+	"github.com/anotherhadi/foam/notify"
+	"github.com/anotherhadi/foam/overlay"
 
-	"github.com/sectui/spilltea/internal/curl"
-	"github.com/sectui/spilltea/internal/message"
-	"github.com/sectui/spilltea/internal/project"
-	"github.com/sectui/spilltea/internal/proxy"
-	"github.com/sectui/spilltea/internal/ui/picker"
+	"github.com/anotherhadi/spilltea/internal/curl"
+	"github.com/anotherhadi/spilltea/internal/message"
+	"github.com/anotherhadi/spilltea/internal/project"
+	"github.com/anotherhadi/spilltea/internal/proxy"
+	"github.com/anotherhadi/spilltea/internal/ui/picker"
 )
 
 // Above this size, ask first: terminals and tmux often truncate large

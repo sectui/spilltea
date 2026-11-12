@@ -10,12 +10,12 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/sectui/foam/draw"
-	"github.com/sectui/foam/geom"
-	"github.com/sectui/foam/minsize"
-	"github.com/sectui/foam/theme"
+	"github.com/anotherhadi/foam/draw"
+	"github.com/anotherhadi/foam/geom"
+	"github.com/anotherhadi/foam/minsize"
+	"github.com/anotherhadi/foam/theme"
 
-	"github.com/sectui/spilltea/internal/proxy"
+	"github.com/anotherhadi/spilltea/internal/proxy"
 )
 
 var minSize = minsize.Size{W: 80, H: 20}

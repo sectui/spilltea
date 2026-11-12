@@ -10,16 +10,16 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/sectui/foam/draw"
-	feditor "github.com/sectui/foam/editor"
-	"github.com/sectui/foam/highlight"
-	"github.com/sectui/foam/list"
-	"github.com/sectui/foam/theme"
-	"github.com/sectui/foam/vim"
+	"github.com/anotherhadi/foam/draw"
+	feditor "github.com/anotherhadi/foam/editor"
+	"github.com/anotherhadi/foam/highlight"
+	"github.com/anotherhadi/foam/list"
+	"github.com/anotherhadi/foam/theme"
+	"github.com/anotherhadi/foam/vim"
 
-	"github.com/sectui/spilltea/internal/message"
-	"github.com/sectui/spilltea/internal/proxy"
-	"github.com/sectui/spilltea/internal/ui/entries"
+	"github.com/anotherhadi/spilltea/internal/message"
+	"github.com/anotherhadi/spilltea/internal/proxy"
+	"github.com/anotherhadi/spilltea/internal/ui/entries"
 )
 
 type Queue struct {

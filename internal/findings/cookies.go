@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sectui/spilltea/internal/message"
+	"github.com/anotherhadi/spilltea/internal/message"
 )
 
 type Cookies struct{}

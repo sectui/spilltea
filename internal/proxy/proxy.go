@@ -24,17 +24,17 @@ import (
 	mproxy "github.com/lqqyt2423/go-mitmproxy/proxy"
 	"github.com/sirupsen/logrus"
 
-	"github.com/sectui/httpql"
+	"github.com/anotherhadi/httpql"
 
-	"github.com/sectui/spilltea/internal/config"
-	"github.com/sectui/spilltea/internal/endpoints"
-	"github.com/sectui/spilltea/internal/findings"
-	"github.com/sectui/spilltea/internal/message"
-	"github.com/sectui/spilltea/internal/project"
-	"github.com/sectui/spilltea/internal/query"
-	"github.com/sectui/spilltea/internal/rules"
-	"github.com/sectui/spilltea/internal/scan"
-	"github.com/sectui/spilltea/internal/scope"
+	"github.com/anotherhadi/spilltea/internal/config"
+	"github.com/anotherhadi/spilltea/internal/endpoints"
+	"github.com/anotherhadi/spilltea/internal/findings"
+	"github.com/anotherhadi/spilltea/internal/message"
+	"github.com/anotherhadi/spilltea/internal/project"
+	"github.com/anotherhadi/spilltea/internal/query"
+	"github.com/anotherhadi/spilltea/internal/rules"
+	"github.com/anotherhadi/spilltea/internal/scan"
+	"github.com/anotherhadi/spilltea/internal/scope"
 )
 
 type Kind int
